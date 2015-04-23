@@ -7,7 +7,7 @@
 		_VolumeSize ("Volume Size", Int) = 0				
 		_VolumeTex ("Volume Texture", 3D) = "" {}
 		_SurfaceColor ("Color", Color) = (1,0,0,1)
-		_IntensityThreshold ("Intensity Threshold", Range (-1, 1)) = 0	
+		_IntensityThreshold ("Intensity Threshold", Range (0, 1)) = 0.5	
 	}
 
 	CGINCLUDE
@@ -89,7 +89,7 @@
 		float3 delta_dir = view_dir * delta_dir_length;	
 				
 		float length_acc = 0;
-		float current_intensity = 0;
+		float current_intensity = 0.0;
 		float max_length = length(front_pos - back_pos);
 		
 		// Linear search

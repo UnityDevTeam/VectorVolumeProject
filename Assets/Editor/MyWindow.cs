@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEditor;
 using System.Collections;
 using System.IO;
+using System.Linq;
 using System.Globalization;
 
 class CellUnityWindow : EditorWindow
@@ -57,22 +58,31 @@ class CellUnityWindow : EditorWindow
 					"",
 					"sdf");
 
+            Debug.Log("Loading sdf file: "+path);
 
             StreamReader file = new StreamReader(path);
 
             var sizes = file.ReadLine();
             var sizeArr = sizes.Split(new char[]{' '});
-            var sizeFromFile = new int[]{Convert.ToInt32(sizeArr[0]), Convert.ToInt32(sizeArr[1]), Convert.ToInt32(sizeArr[2])};
+            int[] sizeFromFile = new int[]{Convert.ToInt32(sizeArr[0]), Convert.ToInt32(sizeArr[1]), Convert.ToInt32(sizeArr[2])};
             
             file.ReadLine(); //Origin ignored for now
             file.ReadLine(); //Cell spacing ignored for now
-            var size = new int[]{ 128, 128, 128 };
+
+            var pow = Math.Floor(Math.Log(sizeFromFile.Max(), 2)) + 1;
+            int useSize = Convert.ToInt32(Math.Pow(2, pow));
+
+            var size = new int[] { useSize, useSize, useSize };
             //float.Parse("41.00027357629127", CultureInfo.InvariantCulture.NumberFormat);
 
             var linearsize = size[0] * size[1] * size[2];
 
             Color[] volumeColors = new Color[linearsize];
             String line;
+
+            float min = float.MaxValue;
+            float max = float.MinValue;
+
             for (int x = 0; x < size[2]; x++)
             {
                 for (int y = 0; y < size[1]; y++)
@@ -96,12 +106,37 @@ class CellUnityWindow : EditorWindow
                             volumeColors[idx].a = float.MaxValue;
                             continue;
                         }
-                        volumeColors[idx].a = float.Parse(line, CultureInfo.InvariantCulture.NumberFormat);
+                        var f = float.Parse(line, CultureInfo.InvariantCulture.NumberFormat);
+                        min = Math.Min(min, f);
+                        max = Math.Max(max, f);
+                        volumeColors[idx].a = f;
                     }
                 }
             }
+            //bring in range 0..1 with a 0.5 isosurface
+            if (max < 0) { max = 0; }
+            if (min > 0) { min = 0; }
 
-            
+            var max2 = max * 2;
+            var min2 = min * 2;
+
+
+            Debug.Log("Min: " + min + ", Max: " + max);
+
+            for (int i = 0; i < linearsize; i++)
+            {
+               if (volumeColors[i].a == float.MaxValue) volumeColors[i].a = max;
+
+               if (volumeColors[i].a > 0)
+               {
+                   volumeColors[i].a = volumeColors[i].a / max2 + 0.5f;
+               }
+               else
+               {
+                   volumeColors[i].a = 0.5f - volumeColors[i].a / min2;
+               }
+            }
+
 
             var texture3D = new Texture3D(size[0], size[1], size[2], TextureFormat.Alpha8, true);
             texture3D.SetPixels(volumeColors);
@@ -122,7 +157,7 @@ class CellUnityWindow : EditorWindow
             AssetDatabase.SaveAssets();
 
             // Print the path of the created asset
-            Debug.Log(AssetDatabase.GetAssetPath(texture3D));
+            Debug.Log("Saved to" +AssetDatabase.GetAssetPath(texture3D));
         }
 
         //[MenuItem("My Commands/Add volume texture")]
