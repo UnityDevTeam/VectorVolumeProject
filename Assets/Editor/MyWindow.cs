@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEditor;
 using System.Collections;
 using System.IO;
+using System.Globalization;
 
 class CellUnityWindow : EditorWindow
 {
@@ -41,6 +42,83 @@ class CellUnityWindow : EditorWindow
             }
 
             AssetDatabase.CreateAsset(texture3D, path);
+            AssetDatabase.SaveAssets();
+
+            // Print the path of the created asset
+            Debug.Log(AssetDatabase.GetAssetPath(texture3D));
+        }
+
+        [MenuItem("My Commands/Load *.sdf file from SDFGen")]
+        static void LoadSDFCommand()
+        {
+
+            var path = EditorUtility.OpenFilePanel(
+					"SDF file",
+					"",
+					"sdf");
+
+
+            StreamReader file = new StreamReader(path);
+
+            var sizes = file.ReadLine();
+            var sizeArr = sizes.Split(new char[]{' '});
+            var sizeFromFile = new int[]{Convert.ToInt32(sizeArr[0]), Convert.ToInt32(sizeArr[1]), Convert.ToInt32(sizeArr[2])};
+            
+            file.ReadLine(); //Origin ignored for now
+            file.ReadLine(); //Cell spacing ignored for now
+            var size = new int[]{ 128, 128, 128 };
+            //float.Parse("41.00027357629127", CultureInfo.InvariantCulture.NumberFormat);
+
+            var linearsize = size[0] * size[1] * size[2];
+
+            Color[] volumeColors = new Color[linearsize];
+            String line;
+            for (int x = 0; x < size[2]; x++)
+            {
+                for (int y = 0; y < size[1]; y++)
+                {
+                    for (int z = 0; z < size[0]; z++)
+                    {
+                        var idx = z + size[1] * y + size[1] * size[2] * x;
+                        if (x >= sizeFromFile[2]){
+                            volumeColors[idx].a = float.MaxValue;
+                            continue;
+                        }
+                        if (y >= sizeFromFile[1]){
+                            volumeColors[idx].a = float.MaxValue;
+                            continue;
+                        }
+                        if (z >= sizeFromFile[0]){
+                            volumeColors[idx].a = float.MaxValue;
+                            continue;
+                        }
+                        if ((line = file.ReadLine()) == null){
+                            volumeColors[idx].a = float.MaxValue;
+                            continue;
+                        }
+                        volumeColors[idx].a = float.Parse(line, CultureInfo.InvariantCulture.NumberFormat);
+                    }
+                }
+            }
+
+            
+
+            var texture3D = new Texture3D(size[0], size[1], size[2], TextureFormat.Alpha8, true);
+            texture3D.SetPixels(volumeColors);
+            texture3D.wrapMode = TextureWrapMode.Clamp;
+            texture3D.anisoLevel = 0;
+            texture3D.Apply();
+
+            string assetPath = "Assets/mesh_sdf_texture.asset";
+
+            Texture3D tmp = (Texture3D)AssetDatabase.LoadAssetAtPath(assetPath, typeof(Texture3D));
+            if (tmp)
+            {
+                AssetDatabase.DeleteAsset(assetPath);
+                tmp = null;
+            }
+
+            AssetDatabase.CreateAsset(texture3D, assetPath);
             AssetDatabase.SaveAssets();
 
             // Print the path of the created asset

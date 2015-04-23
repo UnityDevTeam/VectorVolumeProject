@@ -103,7 +103,7 @@
 			current_pos += delta_dir;
 		}	
 
-		if(current_intensity > 0) discard;
+		if(current_intensity > _IntensityThreshold) discard;
 		
 		float texelSize = 1.0f / _VolumeSize;
 		float3 normal = get_normal(current_pos, texelSize);
