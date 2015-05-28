@@ -5,6 +5,7 @@ using System.Collections;
 using System.IO;
 using System.Linq;
 using System.Globalization;
+using Assets.Editor;
 
 class CellUnityWindow : EditorWindow
 {
@@ -158,6 +159,80 @@ class CellUnityWindow : EditorWindow
 
             // Print the path of the created asset
             Debug.Log("Saved to" +AssetDatabase.GetAssetPath(texture3D));
+        }
+
+
+        [MenuItem("My Commands/Load *.lxn file")]
+        static void LoadLXNCommand()
+        {
+
+            var path = EditorUtility.OpenFilePanel(
+                    "LXN file",
+                    "",
+                    "lxn");
+
+            Debug.Log("Loading lxn file: " + path);
+
+            StreamReader file = new StreamReader(path);
+
+            SDFFile sdf = new SDFFile(File.ReadAllBytes(path));
+
+            Color[] volumeColors = new Color[sdf.linearSize];
+
+            float min = 100000;
+            float max = -100000;
+
+            for (int i = 0; i < volumeColors.Length; i++)
+            {
+                volumeColors[i].a = sdf.data[i];
+                min = Math.Min(sdf.data[i], min);
+                max = Math.Max(sdf.data[i], max);
+            }
+
+            //bring in range 0..1 with a 0.5 isosurface
+            if (max < 0) { max = 0; }
+            if (min > 0) { min = 0; }
+
+            var max2 = max * 2;
+            var min2 = min * 2;
+
+
+            Debug.Log("Min: " + min + ", Max: " + max);
+
+            for (int i = 0; i < sdf.linearSize; i++)
+            {
+                if (volumeColors[i].a == float.MaxValue) volumeColors[i].a = max;
+
+                if (volumeColors[i].a > 0)
+                {
+                    volumeColors[i].a = volumeColors[i].a / max2 + 0.5f;
+                }
+                else
+                {
+                    volumeColors[i].a = 0.5f - volumeColors[i].a / min2;
+                }
+            }
+
+            var texture3D = new Texture3D(sdf.sizes[0], sdf.sizes[1], sdf.sizes[2], TextureFormat.Alpha8, true);
+            texture3D.SetPixels(volumeColors);
+            texture3D.wrapMode = TextureWrapMode.Clamp;
+            texture3D.anisoLevel = 0;
+            texture3D.Apply();
+
+            string assetPath = "Assets/lxn_texture.asset";
+
+            Texture3D tmp = (Texture3D)AssetDatabase.LoadAssetAtPath(assetPath, typeof(Texture3D));
+            if (tmp)
+            {
+                AssetDatabase.DeleteAsset(assetPath);
+                tmp = null;
+            }
+
+            AssetDatabase.CreateAsset(texture3D, assetPath);
+            AssetDatabase.SaveAssets();
+
+            // Print the path of the created asset
+            Debug.Log("Saved to" + AssetDatabase.GetAssetPath(texture3D));
         }
 
         //[MenuItem("My Commands/Add volume texture")]
