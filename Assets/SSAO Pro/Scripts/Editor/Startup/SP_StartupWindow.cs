@@ -48,7 +48,7 @@ public class SP_StartupWindow : EditorWindow
 	public static bool Init(bool forceOpen)
 	{
 		// First line in the changelog is the version string
-		string version = Resources.LoadAssetAtPath<TextAsset>(pathChangelog).text.Split('\n')[0];
+		string version = AssetDatabase.LoadAssetAtPath<TextAsset>(pathChangelog).text.Split('\n')[0];
 
 		if (forceOpen || EditorPrefs.GetString(identifier) != version)
 		{
@@ -68,15 +68,15 @@ public class SP_StartupWindow : EditorWindow
 	void OnEnable()
 	{
 		string versionColor = EditorGUIUtility.isProSkin ? "#ffffffee" : "#000000ee";
-		changelogText = Resources.LoadAssetAtPath<TextAsset>(pathChangelog).text;
+		changelogText = AssetDatabase.LoadAssetAtPath<TextAsset>(pathChangelog).text;
 		changelogText = Regex.Replace(changelogText, @"^[0-9].*", "<color=" + versionColor + "><size=13><b>Version $0</b></size></color>", RegexOptions.Multiline);
 		changelogText = Regex.Replace(changelogText, @"^-.*", "  $0", RegexOptions.Multiline);
 
-		headerPic = Resources.LoadAssetAtPath<Texture2D>(pathImages + "header.jpg");
-		iconTypogenic = Resources.LoadAssetAtPath<Texture2D>(pathImages + "icon-typogenic.png");
-		iconColorful = Resources.LoadAssetAtPath<Texture2D>(pathImages + "icon-colorful.png");
-		iconChromatica = Resources.LoadAssetAtPath<Texture2D>(pathImages + "icon-chromatica.png");
-		iconSSAOPro = Resources.LoadAssetAtPath<Texture2D>(pathImages + "icon-ssaopro.png");
+		headerPic = AssetDatabase.LoadAssetAtPath<Texture2D>(pathImages + "header.jpg");
+		iconTypogenic = AssetDatabase.LoadAssetAtPath<Texture2D>(pathImages + "icon-typogenic.png");
+		iconColorful = AssetDatabase.LoadAssetAtPath<Texture2D>(pathImages + "icon-colorful.png");
+		iconChromatica = AssetDatabase.LoadAssetAtPath<Texture2D>(pathImages + "icon-chromatica.png");
+		iconSSAOPro = AssetDatabase.LoadAssetAtPath<Texture2D>(pathImages + "icon-ssaopro.png");
 	}
 
 	void OnGUI()

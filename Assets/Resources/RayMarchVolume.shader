@@ -7,7 +7,7 @@
 		_VolumeSize ("Volume Size", Int) = 0				
 		_VolumeTex ("Volume Texture", 3D) = "" {}
 		_SurfaceColor ("Color", Color) = (1,0,0,1)
-		_IntensityThreshold ("Intensity Threshold", Range (0, 1)) = 0.5	
+		_IntensityThreshold ("Intensity Threshold", Range (-1, 1)) = 0	
 	}
 
 	CGINCLUDE
@@ -106,10 +106,10 @@
 		if(current_intensity > _IntensityThreshold) discard;
 		
 		float texelSize = 1.0f / _VolumeSize;
-		float3 normal = get_normal(current_pos, texelSize);
-		float ndotl = max(0.0, dot(view_dir, normal));
+		float3 normal = get_normal(current_pos, texelSize*2); // *2 to blur it a bit
+		float ndotl = max(0.0, dot(-view_dir, normal));
 
-		color = float4(_SurfaceColor.rgb * pow(ndotl, 0.0), 1); 
+		color = float4(_SurfaceColor.rgb * pow(ndotl, 0.5), 1); 
 		depth = 0;			
 	}
 
