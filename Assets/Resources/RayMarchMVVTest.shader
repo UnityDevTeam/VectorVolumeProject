@@ -41,14 +41,34 @@
         return output;
     }
 
+	bool isCoordValid(float3 p) {
+		return (p.x <= 1 && p.x >= -1 &&
+			p.y <= 1 && p.y >= -1 &&
+			p.y <= 1 && p.z >= -1);
+	}
+
+	float sample_volume_interpolate(float3 p) {
+
+		float v11 = tex3Dlod(_VolumeTex, float4(p + float3(0.01, 0, 0), 0)).a;
+		float v12 = tex3Dlod(_VolumeTex, float4(p - float3(0.01, 0, 0), 0)).a;
+		float v21 = tex3Dlod(_VolumeTex, float4(p + float3(0, 0.01, 0), 0)).a;
+		float v22 = tex3Dlod(_VolumeTex, float4(p - float3(0, 0.01, 0), 0)).a;
+		float v31 = tex3Dlod(_VolumeTex, float4(p + float3(0, 0, 0.01), 0)).a;
+		float v32 = tex3Dlod(_VolumeTex, float4(p - float3(0, 0, 0.01), 0)).a;
+
+		return (v11+v12+v21+v22+v31+v32)/6.0;
+
+	}
+
 	float sample_volume( float3 p )
 	{	
 		// Our texture is 64x128x96, map into corner of 256x128x128
 		float3 new_point = clamp(p, float3(0.0, 0.0, 0.0), float3(1.0, 1.0, 1.0));
-		new_point.x = p.x /4;// / 4.0;
-		new_point.y = p.y/3;
-		new_point.z = p.z/4;// *3.0 / 4.0;
-		return tex3Dlod(_VolumeTex, float4(new_point, _MipLevel)).a;	
+		new_point.x = new_point.x /2;// / 4.0;
+		new_point.y = new_point.y/3;
+		new_point.z = new_point.z/4;// *3.0 / 4.0;
+		return //sample_volume_interpolate(new_point);
+			   tex3Dlod(_VolumeTex, float4(new_point, _MipLevel)).a;	
 	}
 
 	float get_depth( float3 current_pos )

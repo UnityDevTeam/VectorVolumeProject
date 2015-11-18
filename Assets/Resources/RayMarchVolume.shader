@@ -23,6 +23,9 @@
 	float4 _SurfaceColor;
 	sampler3D _VolumeTex;
 
+	uniform sampler2D _cubicLookup; // Lookup for fast cubic interpolation
+
+
 	struct v2f
 	{
 		float4 pos : SV_POSITION;		
@@ -41,9 +44,75 @@
         return output;
     }
 
+
+	bool isCoordValid(float3 p) {
+		return (p.x <= 1 && p.x >= 0 &&
+			p.y <= 1 && p.y >= 0 &&
+			p.y <= 1 && p.z >= 0);
+	}
+
+
+	float sample_volume_cubic(float3 p) {
+		float3 vCoordHG = (p*_VolumeSize.xxx - 0.5f.xxx);
+		float3 hgX = tex2Dlod(_cubicLookup, float4(vCoordHG.x, 0.5, 0, 0)).xyz;
+		float3 hgY = tex2Dlod(_cubicLookup, float4(vCoordHG.y, 0.5, 0, 0)).xyz;
+		float3 hgZ = tex2Dlod(_cubicLookup, float4(vCoordHG.z, 0.5, 0, 0)).xyz;
+
+
+		float3 cellSizeX = float3(1.0f / (float)_VolumeSize, 0, 0);
+		float3 cellSizeY = float3(0, 1.0f / (float)_VolumeSize, 0);
+		float3 cellSizeZ = float3(0, 0, 1.0f / (float)_VolumeSize);
+
+		// offset -DX and +DX
+		float3 vCoord000 = p - hgX.x * cellSizeX;
+		float3 vCoord100 = p + hgX.y * cellSizeX;
+		// offset +DY
+		float3 vCoord010 = vCoord000 + hgY.y * cellSizeY;
+		float3 vCoord110 = vCoord100 + hgY.y * cellSizeY;
+		// offset +DZ
+		float3 vCoord011 = vCoord010 + hgZ.y * cellSizeZ;
+		float3 vCoord111 = vCoord110 + hgZ.y * cellSizeZ;
+		// offset -DZ
+		vCoord010 = vCoord010 - hgZ.x * cellSizeZ;
+		vCoord110 = vCoord110 - hgZ.x * cellSizeZ;
+		// offset -DY
+		vCoord000 = vCoord000 - hgY.x * cellSizeY;
+		vCoord100 = vCoord100 - hgY.x * cellSizeY;
+		float3 vCoord001 = vCoord000 + hgZ.y * cellSizeZ;
+		float3 vCoord101 = vCoord100 + hgZ.y * cellSizeZ;
+		vCoord000 = vCoord000 - hgZ.x * cellSizeZ;
+		vCoord100 = vCoord100 - hgZ.x * cellSizeZ;
+
+		float value000 = tex3Dlod(_VolumeTex, float4(vCoord000, 0)).a;
+		float value100 = tex3Dlod(_VolumeTex, float4(vCoord100, 0)).a;
+		float value010 = tex3Dlod(_VolumeTex, float4(vCoord010, 0)).a;
+		float value110 = tex3Dlod(_VolumeTex, float4(vCoord110, 0)).a;
+		float value001 = tex3Dlod(_VolumeTex, float4(vCoord001, 0)).a;
+		float value101 = tex3Dlod(_VolumeTex, float4(vCoord101, 0)).a;
+		float value011 = tex3Dlod(_VolumeTex, float4(vCoord011, 0)).a;
+		float value111 = tex3Dlod(_VolumeTex, float4(vCoord111, 0)).a;
+
+		// interpolate along x
+		value000 = lerp(value100, value000, hgX.z);
+		value010 = lerp(value110, value010, hgX.z);
+		value001 = lerp(value101, value001, hgX.z);
+		value011 = lerp(value111, value011, hgX.z);
+
+		// interpolate along y
+		value000 = lerp(value010, value000, hgY.z);
+		value001 = lerp(value011, value001, hgY.z);
+
+		// interpolate along z
+		value000 = lerp(value001, value000, hgZ.z);
+
+		return value000;
+		//return tex3Dlod(_VolumeTex, float4(p, 0));
+	}
+
 	float sample_volume( float3 p )
-	{	
-		return tex3Dlod(_VolumeTex, float4(p, _MipLevel)).a;	
+	{
+		if (isCoordValid(p) == false) return 1;
+		return sample_volume_cubic(p);//tex3Dlod(_VolumeTex, float4(p, _MipLevel)).a;	
 	}
 
 	float get_depth( float3 current_pos )

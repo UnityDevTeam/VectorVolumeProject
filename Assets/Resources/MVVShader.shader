@@ -10,51 +10,67 @@
 	#include "UnityCG.cginc"
 	#pragma target 5.0
 
-	const static int MAX_SDFS = 32;
-	const static int MAX_REGIONS = 32;
-	const static int MAX_SDFSEEDS = 16384;
-	const static int MAX_INDICES = 32;
-	const static int MAX_EMBEDDED = 16384;
-	const static int MAX_INDICESPARTS = 8192;
-	
-	sampler3D _VolumeAtlas; // Atlas of all SDFs...
-	int3 _VolumeAtlasSize; // Size of Atlas for calculation...
-	int _rootSDF; // ID of First sdf
-	// SDF stuff
-	int3 _sdfIndices[MAX_SDFS]; // Indices of sdfs in atlas
-	int3 _sdfDimensions[MAX_SDFS]; // Dimensions of sdfs in atlas
-	int _sdfPositiveId[MAX_SDFS]; // Stores region/sdf id of positive branch
-	int _sdfPositiveRegion[MAX_SDFS]; // True if this branch is a region
-	int _sdfNegativeId[MAX_SDFS]; // Stores region/sdf id of negative branch
-	int _sdfNegativeRegion[MAX_SDFS]; // True if this branch is a region
-	float4x4 _sdfTransforms[MAX_SDFS]; // Stores Transform of SDF (inverse)
-	int _sdfType[MAX_SDFS]; // Type of sdf: 0: default, 1: seed, 2: tiling
-	float4x4 _sdfSeedTransforms[MAX_SDFSEEDS]; // Transform of seeds (inverse)
-	int _sdfSeedTransformIndices[MAX_SDFS]; // Starting index of seedTransforms
-	int _sdfSeedTransformLenght[MAX_SDFS]; // Length of indices
-	float _sdfOffset[MAX_SDFS]; // iso-surface offset
-	// Region stuff
-	int _regionType[MAX_REGIONS]; // Region type: 0: empty, 1: bitmap, 2: color, 3: rbf
-	sampler2D _regionTextures[MAX_REGIONS]; // Textures of array
-	float3 _regionColor[MAX_REGIONS]; // Color of region
-	float _regionOpacity[MAX_REGIONS]; // Opacity of region
-	float3 _regionScales[MAX_REGIONS]; // For Bitmap transform
-	int _regionHasEmbedd[MAX_REGIONS]; // Does region have embedds
-	//There are two kinds of embedds: with and without index
-	int _regionIndices[MAX_REGIONS]; // IDs of Index for Embedded Objects (-1 no index)
-	int _regionEmbeddedIndices[MAX_REGIONS]; // Where embedded objects start (-1 no element in index)
-	int _regionEmbeddedLength[MAX_REGIONS]; // how many objects are there in this part?
-	// Indices
-	float4x4 _indexTransform[MAX_INDICES]; // Transform of index (inverse)
-	int3 _indexSizes[MAX_INDICES]; // Size in each dimenstion
-	int _indexOffset[MAX_INDICES]; // Offset in indexEmbeddedIndices/Length
-	int _embeddedSDFs[MAX_EMBEDDED]; // index of sdfs that are embedded
-	float4x4 _embeddedTransforms[MAX_EMBEDDED]; // transform for embedded objects (inverse)
-	//float4x4 _embeddedBoundingBox[MAX_EMBEDDED]; // boundingbox for embedded objects (inverse)
-	//The following will also include direct embedds in region without index...
-	int _indexEmbeddedIndices[MAX_INDICESPARTS]; // Where embedded objects start (-1 no element in index)
-	int _indexEmbeddedLength[MAX_INDICESPARTS]; // how many objects are there in this part?
-	
+	struct Node
+	{
+		uint positiveId;
+		uint negativeId;
+		uint isLeaf;
+		uint sdfId;
+		uint regionId;
+	};
+
+	struct SDF
+	{
+		uint3 index;
+		uint3 size;
+		float4x4 transform;
+		uint type;
+		// TODO seeded SDFs
+	};
+
+	struct Region
+	{
+		uint type;
+		float3 color;
+		float opacity;
+		// TODO textures
+		// public Vector3 scale;
+
+		// For now only support one index
+		// if no index is used, define 1x1x1 index
+        int embedded;
+		uint3 index_size;
+		float4x4 index_transform;
+		uint index_offset;
+	};
+
+	struct Instance
+	{
+		float4x4 transform;
+		uint rootnode;
+	};
+
+	struct Indexcell
+	{
+		int instance; // -1 if no embedded objects in this index cell
+		int max_instance;
+	};
+
+	uniform sampler3D _VolumeAtlas; // Atlas of all SDFs...
+	uniform int3 _VolumeAtlasSize; // Size of Atlas for calculation...
+	uniform int _rootInstance; // ID of First instance
+
+	uniform StructuredBuffer<Node> nodeBuffer;
+	uniform StructuredBuffer<SDF> sdfBuffer;
+	uniform StructuredBuffer<Region> regionBuffer;
+	uniform StructuredBuffer<Instance> instanceBuffer;
+	uniform StructuredBuffer<Indexcell> indexcellBuffer;
+
+	uniform sampler2D _cubicLookup; // Lookup for fast cubic interpolation
+
+	float4x4 textureTrans = float4x4(float4(0.5,0,0,0.5), float4(0,0.5,0,0.5), float4(0,0,0.5,0.5), float4(0,0,0,1));
+
+	float4 colorr;
 
 	struct v2f
 	{
@@ -74,13 +90,6 @@
         return output;
     }
 
-	// Sample volume at position p, with index and size of actual texture
-	float sample_volume( float3 p, int3 index, int3 size )
-	{	
-
-		float3 new_p = index / float3(_VolumeAtlasSize)+(size / float3(_VolumeAtlasSize))*p;
-		return tex3Dlod(_VolumeAtlas, float4(new_p, 0)).a;	
-	}
 
 	// Transforms a point with given matrix (must be already inverse)
 	float3 transform(float3 p, float4x4 mat)
@@ -88,10 +97,96 @@
 		return (mul(mat, float4(p, 1))).xyz;
 	}
 
-	// Sample volume at psoition p for sdf with Id sdfId
-	float sample_volume(float3 p, int sdfId) {
+	// Code adopted from Lvid Wang's Shader
+	float sample_volume_cubic(float3 p) {
+		float3 vCoordHG = p*_VolumeAtlasSize - 0.5f.xxx;
+		float3 hgX = tex2Dlod(_cubicLookup, float4(vCoordHG.x, 0, 0, 0)).xyz;
+		float3 hgY = tex2Dlod(_cubicLookup, float4(vCoordHG.y, 0, 0, 0)).xyz;
+		float3 hgZ = tex2Dlod(_cubicLookup, float4(vCoordHG.z, 0, 0, 0)).xyz;
 
-		return sample_volume(p, _sdfIndices[sdfId], _sdfDimensions[sdfId]);
+
+		float3 cellSizeX = 1 / (float)_VolumeAtlasSize;
+		float3 cellSizeY = 1 / (float)_VolumeAtlasSize;
+		float3 cellSizeZ = 1 / (float)_VolumeAtlasSize;
+
+		// offset -DX and +DX
+		float3 vCoord000 = p - hgX.x * cellSizeX;
+		float3 vCoord100 = p + hgX.y * cellSizeX;
+		// offset +DY
+		float3 vCoord010 = vCoord000 + hgY.y * cellSizeY;
+		float3 vCoord110 = vCoord100 + hgY.y * cellSizeY;
+		// offset +DZ
+		float3 vCoord011 = vCoord010 + hgZ.y * cellSizeZ;
+		float3 vCoord111 = vCoord110 + hgZ.y * cellSizeZ;
+		// offset -DZ
+		vCoord010 = vCoord010 - hgZ.x * cellSizeZ;
+		vCoord110 = vCoord110 - hgZ.x * cellSizeZ;
+		// offset -DY
+		vCoord000 = vCoord000 - hgY.x * cellSizeY;
+		vCoord100 = vCoord100 - hgY.x * cellSizeY;
+		float3 vCoord001 = vCoord000 + hgZ.y * cellSizeZ;
+		float3 vCoord101 = vCoord100 + hgZ.y * cellSizeZ;
+		vCoord000 = vCoord000 - hgZ.x * cellSizeZ;
+		vCoord100 = vCoord100 - hgZ.x * cellSizeZ;
+
+		float value000 = tex3Dlod(_VolumeAtlas, float4(vCoord000, 0)).a;
+		float value100 = tex3Dlod(_VolumeAtlas, float4(vCoord100, 0)).a;
+		float value010 = tex3Dlod(_VolumeAtlas, float4(vCoord010, 0)).a;
+		float value110 = tex3Dlod(_VolumeAtlas, float4(vCoord110, 0)).a;
+		float value001 = tex3Dlod(_VolumeAtlas, float4(vCoord001, 0)).a;
+		float value101 = tex3Dlod(_VolumeAtlas, float4(vCoord101, 0)).a;
+		float value011 = tex3Dlod(_VolumeAtlas, float4(vCoord011, 0)).a;
+		float value111 = tex3Dlod(_VolumeAtlas, float4(vCoord111, 0)).a;
+
+		// interpolate along x
+		value000 = lerp(value100, value000, hgX.z);
+		value010 = lerp(value110, value010, hgX.z);
+		value001 = lerp(value101, value001, hgX.z);
+		value011 = lerp(value111, value011, hgX.z);
+
+		// interpolate along y
+		value000 = lerp(value010, value000, hgY.z);
+		value001 = lerp(value011, value001, hgY.z);
+
+		// interpolate along z
+		value000 = lerp(value001, value000, hgZ.z);
+
+		return value000;
+
+
+		return tex3Dlod(_VolumeAtlas, float4(p, 0)).a;
+	}
+
+	// Sample volume at position p, with index and size of actual texture
+	float sample_volume( float3 p, int3 index, int3 size )
+	{	
+		index = int3(index.y, index.z, index.x);
+		p = p*0.5 + 0.5.xxx;
+		// point is between 0..1 in every direction
+		//p = float3(p.z, p.x, p.y);
+		//colorr = float4(p, 1);
+		float3 new_p = index / float3(_VolumeAtlasSize)+(size / float3(_VolumeAtlasSize))*p;
+		return sample_volume_cubic(p);
+	}
+
+
+	// Check if point is in standard cube (-1,-1,-1),(1,1,1)
+	bool isCoordValid(float3 p) {
+		return (p.x <= 1 && p.x >= -1 &&
+			p.y <= 1 && p.y >= -1 &&
+			p.z <= 1 && p.z >= -1);
+	}
+
+	// Sample volume at psoition p for sdf with Id sdfId
+	float sample_volume(float3 p, SDF sdf) {
+		p = transform(p, sdf.transform);
+		// If p not in standard cube, return high value...
+		if (isCoordValid(p) == false) {
+			return 1;
+		}
+		// bring p in 0..1 space
+		//p = transform(p, textureTrans);
+		return sample_volume(p, sdf.index, sdf.size);
 
 		//float current_value;
 
@@ -118,187 +213,134 @@
 		//return current_value;
 	}
 
-	// Check if point is in standard cube (-1,-1,-1),(1,1,1)
-	bool isCoordValid(float3 p) {
-		return (p.x <= 1 && p.x >= -1 && 
-				p.y <= 1 && p.y >= -1 && 
-				p.y <= 1 && p.z >= -1);
-	}
-
 	// returns color for point and region
-	float4 get_color(int regionId, float3 p) {
+	float4 get_color(Region region, float3 p) {
 		// Region type: 0: empty, 1: bitmap, 2: color, 3: rbf
-		if (_regionType[regionId] == 0) {
+		if (region.type == 0) {
 			// empty:
 			return float4(-1, -1, -1, -1);
 		}
-		else if (_regionType[regionId] == 1) {
+		else if (region.type == 1) {
 			// bitmap:
-			//how to get correct coordinates?
-			return float4(1, 0, 0, _regionOpacity[regionId]);
+			// TODO
+			return float4(1, 0, 0, region.opacity);
 		}
-		else if (_regionType[regionId] == 2) {
+		else if (region.type == 2) {
 			// color
-			return float4(_regionColor[regionId], _regionOpacity[regionId]);
+			return float4(region.color, region.opacity);
 		}
 		else {
 			return float4(0, 0, 0, 1);
 		}
 	}
 
-	void frag_surf_opaque(v2f input, out float4 color : COLOR0, out float depth : SV_Depth)
+	void frag_surf_opaque(v2f input, out float4 color : COLOR0) //, out float depth : SV_Depth
 	{
 		
-		color = float4(normalize(input.worldPos.xyz),1.0);
 		
-		// Tranform with first SDF
-		//float3 p = transform(input.worldPos, _sdfTransforms[_rootSDF]);
-		// We are now in the root SDF
-		bool fin = false;
-		int current_sdf = _rootSDF;
-		int current_value = 0;
-		float3 p = input.worldPos;
-		float3 oldP = p;
 		int in_embedded = 0; // Counts the embedded level
 		int current_in_embedded = -1; //Current embedded level we are in...
-		int current_embedded = 0;
 		int current_embedded_index = 0; // Gives index of current embedded objects
 		int current_embedded_length = 0; // Gives length of current embedded objects
-		int node = 0; // ID for sdf/region
-		bool is_leaf = false; // true if we have a leaf...
+
+
+		int i = _rootInstance;
+		Instance inst = instanceBuffer[i];
+		Node node = nodeBuffer[inst.rootnode];
+		float3 p = transform(input.worldPos, inst.transform);
+		float3 oldP = p;
+
 		float3 indexP = p;
-		int index_index; //Ahhh... yeah... the linear index of the embeddedobjects start/length of the index z+y*size_z+x*size_z*size_y
-		
-		for (int i = 0; i < 512; i++)
-		{
-			// Using algorithm from paper
+		int linear_index; //The linear index of the embeddedobjects start/length of the index z+y*size_z+x*size_z*size_y
+
+
+		for (int b = 0; b < 512; b++) {
 			if (in_embedded == current_in_embedded && isCoordValid(p) == false) {
-				// p not inside current embedded instance, try next...
-				current_embedded++; // Increment embedded index
-				if (current_embedded >= current_embedded_index + current_embedded_length) {
+				i++;
+				if (i >= current_embedded_index + current_embedded_length) {
 					// No more embedded objects here -> return region color
 					break;
 				}
-				current_sdf = _embeddedSDFs[current_embedded];
-				p = transform(oldP, _embeddedTransforms[current_sdf]);
+				inst = instanceBuffer[i];
+				node = nodeBuffer[inst.rootnode];
+				p = transform(oldP, inst.transform);
 				continue;
 			}
+
 			current_in_embedded--; // We don't want to look for embedded objects, because we are already in a correct one...
-			if (sample_volume(p, current_sdf) > 0) {
-				node = _sdfPositiveId[current_sdf];
-				is_leaf = _sdfPositiveRegion[current_sdf] > 0;
+
+			if (sample_volume(p, sdfBuffer[node.sdfId]) > 0) {
+				node = nodeBuffer[node.positiveId];
 			}
 			else {
-				node = _sdfNegativeId[current_sdf];
-				is_leaf = _sdfNegativeRegion[current_sdf] > 0;
+				node = nodeBuffer[node.negativeId];
 			}
 
-			if (is_leaf) {
-				if (_regionHasEmbedd[node] == 0) {
-					//normal region
-					if (_regionType[node] == 0) {
-						// this is empty, when we are in an embedded object, go to next one:
-						current_embedded++; // Increment embedded index
-						if (current_embedded >= current_embedded_index + current_embedded_length) {
+			if (node.isLeaf > 0) {
+				// We are now in a region...
+				Region r = regionBuffer[node.regionId];
+				if (r.embedded == 0) {
+					// No embedding
+					color = get_color(r, p);
+					if (color.x == -1) {
+						// We are in an empty object, check for embedd
+						i++;
+						if (i >= current_embedded_index + current_embedded_length) {
 							// No more embedded objects here -> return region color
 							break;
 						}
-						current_sdf = _embeddedSDFs[current_embedded];
-						p = transform(oldP, _embeddedTransforms[current_sdf]);
-					} else {
-						color = get_color(node, p);
-						break;
+						inst = instanceBuffer[i];
+						node = nodeBuffer[inst.rootnode];
+						p = transform(oldP, inst.transform);
 					}
+					else break;
 				}
 				else {
-					// Embedded stuff
-					color = get_color(node, p); // If all embedded are empty, not reached, use that color
+					// Embedded objects
+					color = get_color(r, p); // If all embedded are empty, not reached, use that color
 					//First check where we are in index
-
-					current_embedded_index = _regionIndices[node];
-
-					if (current_embedded_index < 0) {
-						// No index, just embedds
-						current_embedded_index = _regionEmbeddedIndices[node];
-						if (current_embedded_index < 0) return;
-
-						// Okay loop through embedded objects
-						current_embedded_length = _regionEmbeddedLength[node];
-						current_embedded = current_embedded_index;
-						oldP = p;
-						current_sdf = _indexEmbeddedIndices[current_embedded];
-						p = transform(p, _embeddedTransforms[current_sdf]);
-						continue;
-					}
-
-
-					indexP = transform(p, _indexTransform[current_embedded_index]);
+					indexP = transform(p, r.index_transform);
 
 					if (indexP.x < -1 || indexP.x > 1 ||
 						indexP.y < -1 || indexP.y > 1 ||
 						indexP.z < -1 || indexP.z > 1) {
 						// No embedded will be in index, just quit now
-						return;
+						break;
 					}
 
 					// indexP is now in (-1,-1,-1)x(1,1,1) of index, time to check correct ccordinate
 					// get in range 0..0.999
 					indexP = smoothstep(float3(-1, -1, -1), float3(1.0001, 1.0001, 1.0001),indexP);
-					index_index = (int)(_indexSizes[current_embedded_index].x*indexP.x) * _indexSizes[current_embedded_index].z * _indexSizes[current_embedded_index].y +
-								  (int)(_indexSizes[current_embedded_index].y*indexP.y) * _indexSizes[current_embedded_index].z +
-								  (int)(_indexSizes[current_embedded_index].z*indexP.z);
+					linear_index = (int)(r.index_size.x*indexP.x) * r.index_size.z * r.index_size.y +
+					    		   (int)(r.index_size.y*indexP.y) * r.index_size.z +
+								   (int)(r.index_size.z*indexP.z);
 
-					current_embedded_index = _indexEmbeddedIndices[_indexOffset[current_embedded_index] + index_index];
-					current_embedded_length = _indexEmbeddedLength[_indexOffset[current_embedded_index] + index_index];
-					current_embedded = current_embedded_index;
+
+					current_embedded_index = indexcellBuffer[r.index_offset + linear_index].instance;
+
+					if (current_embedded_index < 0) {
+						//No embedds
+						break;
+					}
+
+					current_embedded_length = indexcellBuffer[r.index_offset + linear_index].max_instance;
+					i = current_embedded_index;
 
 					oldP = p;
-					current_sdf = _indexEmbeddedIndices[current_embedded];
-					p = transform(p, _embeddedTransforms[current_sdf]);
+					inst = instanceBuffer[i];
+					node = nodeBuffer[inst.rootnode];
+					p = transform(p, inst.transform);
 
 					in_embedded++;
 					current_in_embedded = in_embedded;
 				}
 			}
-			else {
-				// no leaf... prepare for new sdf
-				current_sdf = node; 
-			}
 
-			// Ok we should have some color by now, else
-			if (color.x < 0) discard;
-
-			//// Check sdf
-			//// Check sdf type
-			//p = transform(p, _sdfTransforms[current_sdf]);
-			//if (_sdfType[current_sdf] == 0) {
-			//	// Simple SDF
-			//	current_value = sample_volume(p, _sdfIndices[current_sdf], _sdfDimensions[current_sdf]);
-			//}
-			//else if (_sdfType[current_sdf] == 1) {
-			//	// Seeding
-			//	for (int i = 0; i < _sdfSeedTransfomrLenght[current_sdf]; i++)
-			//	{
-			//		current_value = min(current_value,
-
-			//			sample_volume(
-			//				transform(
-			//					p, _sdfSeedTransforms[_sdfSeedTransformIndices[current_sdf] + i]),
-			//				_sdfIndices[current_sdf],
-			//				_sdfDimensions[current_sdf]));
-			//	}
-			//}
-			//else discard; // Tiling not supported yet...
-			//
-			//// Decide what to do...
-			//if (current_value >= 0) {
-			//	// Do positive stuff
-
-			//}
-			//else {
-			//	// Do negative stuff
-			//}
 		}
+
+		// Ok we should have some color by now, else
+		if (color.x < 0) color = float4(0,0,0,1);
+
 	}
 
 	ENDCG

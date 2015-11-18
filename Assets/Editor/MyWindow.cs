@@ -5,18 +5,57 @@ using System.Collections;
 using System.IO;
 using System.Linq;
 using System.Globalization;
-using Assets.MVVReader;
+using Assets.Editor.MVVReader;
 
 class CellUnityWindow : EditorWindow
 {
+
     // Debug function to instanciate molecules in edit mode
     public static class MyMenuCommands
     {
+        [MenuItem("My Commands/Test")]
+        static void Test()
+        {
+            //Debug.Log(System.Runtime.InteropServices.Marshal.SizeOf(typeof(Region)));
+
+            Material mat = Selection.activeGameObject.GetComponent<Renderer>().sharedMaterial;
+            // Creating Cubic Lookup Table (From Lvid Wang)
+            Debug.Log("Creating Cubic Lookup Table");
+
+            Color[] lookup_data = new Color[256];
+
+            for (int i = 0; i < 256; i++)
+            {
+                float x = (float)i / 255.0f;
+                float x_sqr = x * x;
+                float x_cub = x * x_sqr;
+
+                float w0 = (-x_cub + 3.0f * x_sqr - 3.0f * x + 1.0f) / 6.0f;
+                float w1 = (3.0f * x_cub - 6.0f * x_sqr + 4.0f) / 6.0f;
+                float w2 = (-3.0f * x_cub + 3.0f * x_sqr + 3.0f * x + 1.0f) / 6.0f;
+                float w3 = x_cub / 6.0f;
+
+                lookup_data[i] = new Color(1.0f - w1 / (w0 + w1) + x, // h0(x)
+                                           1.0f + w3 / (w2 + w3) - x, // h1(x)
+                                           w0 + w1,                   // g0(x)
+                                           1);
+            }
+
+            Texture2D lookup = new Texture2D(256, 1, TextureFormat.RGBAFloat, true);
+            lookup.anisoLevel = 0;
+            lookup.SetPixels(lookup_data);
+            lookup.filterMode = FilterMode.Trilinear;
+            lookup.wrapMode = TextureWrapMode.Repeat;
+
+            mat.SetTexture("_cubicLookup", lookup);
+        }
+
         [MenuItem("My Commands/Load MVVObject")]
         static void LoadMVVObject()
         {
             MVVRoot obj = new MVVRoot();
-            obj.readFromFile("C:\\Users\\orakeldel\\Documents\\Uni\\Ideen\\Ivan\\orange\\orange.xml", "ORANGE");
+            obj.readFromFile("C:\\Users\\orakeldel\\Documents\\Uni\\Ideen\\Ivan\\orange\\orange_nobitmap.xml", "ORANGE");
+            obj.passToShader(Selection.activeGameObject.GetComponent<Renderer>().sharedMaterial);
         }
 
         [MenuItem("My Commands/Load volume texture")]
@@ -30,7 +69,7 @@ class CellUnityWindow : EditorWindow
             var fieldData = new float[bytes.Length / sizeof(float)];
             Buffer.BlockCopy(bytes, 0, fieldData, 0, bytes.Length);
 
-            for (int i = 0; i < size; i ++)
+            for (int i = 0; i < size; i++)
             {
                 volumeColors[i].a = fieldData[i];
             }
@@ -62,18 +101,18 @@ class CellUnityWindow : EditorWindow
         {
 
             var path = EditorUtility.OpenFilePanel(
-					"SDF file",
-					"",
-					"sdf");
+                    "SDF file",
+                    "",
+                    "sdf");
 
-            Debug.Log("Loading sdf file: "+path);
+            Debug.Log("Loading sdf file: " + path);
 
             StreamReader file = new StreamReader(path);
 
             var sizes = file.ReadLine();
-            var sizeArr = sizes.Split(new char[]{' '});
-            int[] sizeFromFile = new int[]{Convert.ToInt32(sizeArr[0]), Convert.ToInt32(sizeArr[1]), Convert.ToInt32(sizeArr[2])};
-            
+            var sizeArr = sizes.Split(new char[] { ' ' });
+            int[] sizeFromFile = new int[] { Convert.ToInt32(sizeArr[0]), Convert.ToInt32(sizeArr[1]), Convert.ToInt32(sizeArr[2]) };
+
             file.ReadLine(); //Origin ignored for now
             file.ReadLine(); //Cell spacing ignored for now
 
@@ -98,19 +137,23 @@ class CellUnityWindow : EditorWindow
                     for (int z = 0; z < size[0]; z++)
                     {
                         var idx = z + size[1] * y + size[1] * size[2] * x;
-                        if (x >= sizeFromFile[2]){
+                        if (x >= sizeFromFile[2])
+                        {
                             volumeColors[idx].a = float.MaxValue;
                             continue;
                         }
-                        if (y >= sizeFromFile[1]){
+                        if (y >= sizeFromFile[1])
+                        {
                             volumeColors[idx].a = float.MaxValue;
                             continue;
                         }
-                        if (z >= sizeFromFile[0]){
+                        if (z >= sizeFromFile[0])
+                        {
                             volumeColors[idx].a = float.MaxValue;
                             continue;
                         }
-                        if ((line = file.ReadLine()) == null){
+                        if ((line = file.ReadLine()) == null)
+                        {
                             volumeColors[idx].a = float.MaxValue;
                             continue;
                         }
@@ -133,16 +176,16 @@ class CellUnityWindow : EditorWindow
 
             for (int i = 0; i < linearsize; i++)
             {
-               if (volumeColors[i].a == float.MaxValue) volumeColors[i].a = max;
+                if (volumeColors[i].a == float.MaxValue) volumeColors[i].a = max;
 
-               if (volumeColors[i].a > 0)
-               {
-                   volumeColors[i].a = volumeColors[i].a / max2 + 0.5f;
-               }
-               else
-               {
-                   volumeColors[i].a = 0.5f - volumeColors[i].a / min2;
-               }
+                if (volumeColors[i].a > 0)
+                {
+                    volumeColors[i].a = volumeColors[i].a / max2 + 0.5f;
+                }
+                else
+                {
+                    volumeColors[i].a = 0.5f - volumeColors[i].a / min2;
+                }
             }
 
 
@@ -165,40 +208,53 @@ class CellUnityWindow : EditorWindow
             AssetDatabase.SaveAssets();
 
             // Print the path of the created asset
-            Debug.Log("Saved to" +AssetDatabase.GetAssetPath(texture3D));
+            Debug.Log("Saved to" + AssetDatabase.GetAssetPath(texture3D));
         }
 
 
-        //[MenuItem("My Commands/Load *.lxn file")]
-        //static void LoadLXNCommand()
-        //{
+        [MenuItem("My Commands/Load *.lxn file")]
+        static void LoadLXNCommand()
+        {
 
-        //    var path = EditorUtility.OpenFilePanel(
-        //            "LXN file",
-        //            "",
-        //            "lxn");
+            var path = EditorUtility.OpenFilePanel(
+                    "LXN file",
+                    "",
+                    "lxn");
 
-        //    Debug.Log("Loading lxn file: " + path);
+            Debug.Log("Loading lxn file: " + path);
 
-        //    //StreamReader file = new StreamReader(path);
+            //StreamReader file = new StreamReader(path);
 
-        //    MVVSDFFile sdf = new MVVSDFFile(File.ReadAllBytes(path));
+            MVVSDFFile sdf = new MVVSDFFile(File.ReadAllBytes(path));
 
-        //    string assetPath = "Assets/lxn_texture.asset";
+            Texture3D texture3D = new Texture3D(sdf.sizes[0], sdf.sizes[1], sdf.sizes[2], TextureFormat.Alpha8, false);
+            texture3D.SetPixels(sdf.volumeColors);
+            texture3D.filterMode = FilterMode.Bilinear;
+            switch (sdf.addressMode)
+            {
+                case 1: texture3D.wrapMode = TextureWrapMode.Repeat; break;
+                default: texture3D.wrapMode = TextureWrapMode.Clamp; break;
+            }
 
-        //    Texture3D tmp = (Texture3D)AssetDatabase.LoadAssetAtPath(assetPath, typeof(Texture3D));
-        //    if (tmp)
-        //    {
-        //        AssetDatabase.DeleteAsset(assetPath);
-        //        tmp = null;
-        //    }
+            texture3D.anisoLevel = 0;
+            texture3D.Apply();
 
-        //    AssetDatabase.CreateAsset(sdf.texture3D, assetPath);
-        //    AssetDatabase.SaveAssets();
+            string assetPath = "Assets/lxn_texture.asset";
 
-        //    // Print the path of the created asset
-        //    Debug.Log("Saved to" + AssetDatabase.GetAssetPath(sdf.texture3D));
-        //}
+            Texture3D tmp = (Texture3D)AssetDatabase.LoadAssetAtPath(assetPath, typeof(Texture3D));
+            if (tmp)
+            {
+                AssetDatabase.DeleteAsset(assetPath);
+                tmp = null;
+            }
+
+            AssetDatabase.CreateAsset(texture3D, assetPath);
+            AssetDatabase.SaveAssets();
+
+            // Print the path of the created asset
+            Debug.Log("Saved to" + AssetDatabase.GetAssetPath(texture3D));
+
+        }
 
         //[MenuItem("My Commands/Add volume texture")]
         //static void FirstCommand()
