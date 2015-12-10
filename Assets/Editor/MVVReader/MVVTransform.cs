@@ -29,6 +29,7 @@ namespace Assets.Editor.MVVReader
         /// </summary>
         public void createMatrix()
         {
+            matrix = Matrix4x4.identity;
             matrix.SetTRS(position, Quaternion.Euler(rotation), scale);
         }
 

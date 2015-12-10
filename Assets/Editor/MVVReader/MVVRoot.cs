@@ -36,9 +36,11 @@ namespace Assets.Editor.MVVReader
         public int size_z;
         public Matrix4x4 transform;
         public int type;
+        int first_transform;
+        int max_transform;
         // TODO seeded SDFs
 
-        public SDF(int[] index, int[] size, Matrix4x4 transform, int type)
+        public SDF(int[] index, int[] size, Matrix4x4 transform, int type, int first_transform, int max_transform)
         {
             this.index_x = index[0];
             this.index_y = index[1];
@@ -48,6 +50,8 @@ namespace Assets.Editor.MVVReader
             this.size_z = size[2];
             this.transform = transform;
             this.type = type;
+            this.first_transform = first_transform;
+            this.max_transform = max_transform;
         }
     }
 
@@ -126,6 +130,7 @@ namespace Assets.Editor.MVVReader
         private int currentObjectIndex = 0;
         private int currentNodeIndex = 0;
         private int currentIndexOffset = 0;
+        private int currentTransformIndex = 0;
 
 
         public void passToShader(Material mat)
@@ -135,6 +140,7 @@ namespace Assets.Editor.MVVReader
             Region[] regions_for_shader = new Region[32];
             Instance[] instances_for_shader = new Instance[16384];
             Indexcell[] indexcells_for_shader = new Indexcell[16384];
+            Matrix4x4[] transforms_for_shader = new Matrix4x4[16384];
             Debug.Log("Passing MVV to shader...");
             mat.SetTexture("_VolumeAtlas", globalTexture);
             int max_dim = Math.Max(globalTexture.depth, Math.Max(globalTexture.width, globalTexture.height));
@@ -169,7 +175,18 @@ namespace Assets.Editor.MVVReader
             foreach (MVVSDF sdf in sdfs.Values)
             {
                 sdf.transform.createMatrix();
-                sdfs_for_shader[sdf.index] = new SDF(sdf.file.index, sdf.file.sizes, sdf.transform.matrix.inverse, (int)sdf.type);
+                int start_transform = currentTransformIndex;
+                int max_transform = 0;
+                if (sdf.seedTransforms != null && sdf.seedTransforms.Length > 0)
+                {
+                    max_transform = sdf.seedTransforms.Length;
+                    for (; currentTransformIndex < start_transform + sdf.seedTransforms.Length; currentTransformIndex++)
+                    {
+                        sdf.seedTransforms[currentTransformIndex - start_transform].createMatrix();
+                        transforms_for_shader[currentTransformIndex] = sdf.seedTransforms[currentTransformIndex - start_transform].matrix.inverse;
+                    }
+                }
+                sdfs_for_shader[sdf.index] = new SDF(sdf.file.index, sdf.file.sizes, sdf.transform.matrix.inverse, (int)sdf.type, start_transform, max_transform);
             }
 
             foreach (MVVRegion region in regions.Values)
@@ -226,6 +243,7 @@ namespace Assets.Editor.MVVReader
                                 {
                                     emb.transform.createMatrix();
                                     instances_for_shader[currentObjectIndex] = new Instance(emb.transform.matrix.inverse, emb.mvv_object.tree.root.index);
+                                    
                                     currentObjectIndex++;
                                 }
                             } else
@@ -248,7 +266,8 @@ namespace Assets.Editor.MVVReader
             GPUBuffer.Instance.RegionBuffer.SetData(regions_for_shader);
             GPUBuffer.Instance.IndexcellBuffer.SetData(indexcells_for_shader);
             GPUBuffer.Instance.InstanceBuffer.SetData(instances_for_shader);
-            
+            GPUBuffer.Instance.TransformBuffer.SetData(transforms_for_shader);
+
             Debug.Log("...uploading");
             // Load buffers to shader
             mat.SetBuffer("nodeBuffer", GPUBuffer.Instance.NodeBuffer);
@@ -287,6 +306,11 @@ namespace Assets.Editor.MVVReader
             lookup.filterMode = FilterMode.Trilinear;
 
             mat.SetTexture("_cubicLookup", lookup);
+
+            foreach (MVVSDF sdf in sdfs.Values)
+            {
+                Debug.Log(sdf.identifier + ":" + sdf.file.sizes[0] + "," + sdf.file.sizes[1] + "," + sdf.file.sizes[2]);
+            }
 
         }
 
@@ -493,7 +517,7 @@ namespace Assets.Editor.MVVReader
 
             globalTexture = new Texture3D(dimension[0], dimension[1], dimension[2], TextureFormat.Alpha8, true);
             globalTexture.SetPixels(colors);
-            globalTexture.filterMode = FilterMode.Bilinear;
+            globalTexture.filterMode = FilterMode.Point;
             globalTexture.anisoLevel = 0;
             globalTexture.Apply();
 

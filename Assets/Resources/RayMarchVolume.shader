@@ -53,15 +53,15 @@
 
 
 	float sample_volume_cubic(float3 p) {
-		float3 vCoordHG = (p*_VolumeSize.xxx - 0.5f.xxx);
+		float3 vCoordHG = (p*_VolumeSize - 0.5f.xxx);
 		float3 hgX = tex2Dlod(_cubicLookup, float4(vCoordHG.x, 0.5, 0, 0)).xyz;
 		float3 hgY = tex2Dlod(_cubicLookup, float4(vCoordHG.y, 0.5, 0, 0)).xyz;
 		float3 hgZ = tex2Dlod(_cubicLookup, float4(vCoordHG.z, 0.5, 0, 0)).xyz;
 
-
-		float3 cellSizeX = float3(1.0f / (float)_VolumeSize, 0, 0);
-		float3 cellSizeY = float3(0, 1.0f / (float)_VolumeSize, 0);
-		float3 cellSizeZ = float3(0, 0, 1.0f / (float)_VolumeSize);
+		
+		float3 cellSizeX = 1 / (float)_VolumeSize.xxx;
+		float3 cellSizeY = 1 / (float)_VolumeSize.xxx;
+		float3 cellSizeZ = 1 / (float)_VolumeSize.xxx;
 
 		// offset -DX and +DX
 		float3 vCoord000 = p - hgX.x * cellSizeX;

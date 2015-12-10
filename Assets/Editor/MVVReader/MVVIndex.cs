@@ -71,7 +71,9 @@ namespace Assets.Editor.MVVReader
                         embedded_indexed_objects[x, y, z] = new List<MVVEmbedded>();
                         foreach (MVVEmbedded embedded in embedded_objects)
                         {
-                            if (index_obbs[x, y, z].Intersects(MVVOBB.Transform(embedded.mvv_object.outerBounds, embedded.transform)))
+                            MVVOBB bound = new MVVOBB();
+                            bound.transform = new MVVTransform(embedded.transform);
+                            if (index_obbs[x, y, z].Intersects(bound))
                             {
                                 embedded_indexed_objects[x, y, z].Add(embedded);
                             }

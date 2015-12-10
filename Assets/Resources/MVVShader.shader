@@ -12,25 +12,26 @@
 
 	struct Node
 	{
-		uint positiveId;
-		uint negativeId;
-		uint isLeaf;
-		uint sdfId;
-		uint regionId;
+		int positiveId;
+		int negativeId;
+		int isLeaf;
+		int sdfId;
+		int regionId;
 	};
 
 	struct SDF
 	{
-		uint3 index;
-		uint3 size;
+		int3 index;
+		int3 size;
 		float4x4 transform;
-		uint type;
-		// TODO seeded SDFs
+		int type;
+		int first_transform;
+		int max_transform;
 	};
 
 	struct Region
 	{
-		uint type;
+		int type;
 		float3 color;
 		float opacity;
 		// TODO textures
@@ -39,15 +40,15 @@
 		// For now only support one index
 		// if no index is used, define 1x1x1 index
         int embedded;
-		uint3 index_size;
+		int3 index_size;
 		float4x4 index_transform;
-		uint index_offset;
+		int index_offset;
 	};
 
 	struct Instance
 	{
 		float4x4 transform;
-		uint rootnode;
+		int rootnode;
 	};
 
 	struct Indexcell
@@ -65,6 +66,7 @@
 	uniform StructuredBuffer<Region> regionBuffer;
 	uniform StructuredBuffer<Instance> instanceBuffer;
 	uniform StructuredBuffer<Indexcell> indexcellBuffer;
+	uniform StructuredBuffer<float4x4> transformBuffer;
 
 	uniform sampler2D _cubicLookup; // Lookup for fast cubic interpolation
 
@@ -99,15 +101,20 @@
 
 	// Code adopted from Lvid Wang's Shader
 	float sample_volume_cubic(float3 p) {
+		return tex3Dlod(_VolumeAtlas, float4(p, 0)).a;
 		float3 vCoordHG = p*_VolumeAtlasSize - 0.5f.xxx;
+		//vCoordHG = p;// -0.5f.xxx;
 		float3 hgX = tex2Dlod(_cubicLookup, float4(vCoordHG.x, 0, 0, 0)).xyz;
 		float3 hgY = tex2Dlod(_cubicLookup, float4(vCoordHG.y, 0, 0, 0)).xyz;
 		float3 hgZ = tex2Dlod(_cubicLookup, float4(vCoordHG.z, 0, 0, 0)).xyz;
 
 
-		float3 cellSizeX = 1 / (float)_VolumeAtlasSize;
-		float3 cellSizeY = 1 / (float)_VolumeAtlasSize;
-		float3 cellSizeZ = 1 / (float)_VolumeAtlasSize;
+		//float3 cellSizeX = 1 / (float)_VolumeAtlasSize.xxx;
+		//float3 cellSizeY = 1 / (float)_VolumeAtlasSize.xxx;
+		//float3 cellSizeZ = 1 / (float)_VolumeAtlasSize.xxx;
+		float3 cellSizeX = float3(1 / (float)_VolumeAtlasSize.x, 0, 0);
+		float3 cellSizeY = float3(0, 1 / (float)_VolumeAtlasSize.x, 0);
+		float3 cellSizeZ = float3(0, 0, 1 / (float)_VolumeAtlasSize.x);
 
 		// offset -DX and +DX
 		float3 vCoord000 = p - hgX.x * cellSizeX;
@@ -152,21 +159,21 @@
 		value000 = lerp(value001, value000, hgZ.z);
 
 		return value000;
-
-
-		return tex3Dlod(_VolumeAtlas, float4(p, 0)).a;
 	}
 
 	// Sample volume at position p, with index and size of actual texture
 	float sample_volume( float3 p, int3 index, int3 size )
 	{	
 		index = int3(index.y, index.z, index.x);
-		p = p*0.5 + 0.5.xxx;
-		// point is between 0..1 in every direction
-		//p = float3(p.z, p.x, p.y);
+		// point is between -1..1 in every direction
+		// put between 0..1
+		p = p/2.0f+0.5f.xxx;
 		//colorr = float4(p, 1);
+		//transform point in image space
+		p = float3(p.y, p.z, p.x);
+		
 		float3 new_p = index / float3(_VolumeAtlasSize)+(size / float3(_VolumeAtlasSize))*p;
-		return sample_volume_cubic(p);
+		return sample_volume_cubic(new_p);
 	}
 
 
@@ -180,37 +187,37 @@
 	// Sample volume at psoition p for sdf with Id sdfId
 	float sample_volume(float3 p, SDF sdf) {
 		p = transform(p, sdf.transform);
-		// If p not in standard cube, return high value...
-		if (isCoordValid(p) == false) {
+		if (sdf.type == 0) {
+			// If p not in standard cube, return high value...
+			if (isCoordValid(p) == false) {
+				return 1;
+			}
+			return sample_volume(p, sdf.index, sdf.size);
+		}
+		//seed
+		if (sdf.type == 1) {
+			for (int i = sdf.first_transform; i < sdf.first_transform + sdf.max_transform; i++)
+			{
+				float3 newP = transform(p, transformBuffer[i]);
+				// Check range
+				if (isCoordValid(newP))
+				{
+					return sample_volume(newP, sdf.index, sdf.size);
+				}
+			}
 			return 1;
 		}
-		// bring p in 0..1 space
-		//p = transform(p, textureTrans);
-		return sample_volume(p, sdf.index, sdf.size);
-
-		//float current_value;
-
-		//p = transform(p, _sdfTransforms[sdfId]);
-
-		//if (_sdfType[sdfId] == 0) {
-		//	// Simple SDF
-		//	current_value = sample_volume(p, _sdfIndices[sdfId], _sdfDimensions[sdfId]);
-		//}
-		//else if (_sdfType[sdfId] == 1) {
-		//	// Seeding
-		//	for (int i = 0; i < _sdfSeedTransformLenght[sdfId]; i++)
-		//	{
-		//		current_value = min(current_value,
-		//			sample_volume(
-		//				transform(
-		//					p, _sdfSeedTransforms[_sdfSeedTransformIndices[sdfId] + i]),
-		//				_sdfIndices[sdfId],
-		//				_sdfDimensions[sdfId]));
-		//	}
-		//}
-		//else current_value = sample_volume(p, _sdfIndices[sdfId], _sdfDimensions[sdfId]); // Tiling not supported yet...
-
-		//return current_value;
+		//Tiling
+		if (sdf.type == 2) {
+			//Transform point to 0..1
+			p = p/2.0f+0.5f.xxx;
+			p = p - floor(p);
+			//Transform back;
+			p = p-0.5f;
+			p = p*2.0f;
+			return sample_volume(p, sdf.index, sdf.size);
+		}
+		return 1;
 	}
 
 	// returns color for point and region
@@ -223,11 +230,11 @@
 		else if (region.type == 1) {
 			// bitmap:
 			// TODO
-			return float4(1, 0, 0, region.opacity);
+			return float4(1, 0, 0, 1);// region.opacity);
 		}
 		else if (region.type == 2) {
 			// color
-			return float4(region.color, region.opacity);
+			return float4(region.color, 1);//, region.opacity);
 		}
 		else {
 			return float4(0, 0, 0, 1);
@@ -247,7 +254,8 @@
 		int i = _rootInstance;
 		Instance inst = instanceBuffer[i];
 		Node node = nodeBuffer[inst.rootnode];
-		float3 p = transform(input.worldPos, inst.transform);
+		float3 p = input.worldPos;
+		p = transform(p, inst.transform);
 		float3 oldP = p;
 
 		float3 indexP = p;
