@@ -53,6 +53,7 @@
 
 
 	float sample_volume_cubic(float3 p) {
+		return tex3Dlod(_VolumeTex, float4(p, 0)).a;
 		float3 vCoordHG = (p*_VolumeSize - 0.5f.xxx);
 		float3 hgX = tex2Dlod(_cubicLookup, float4(vCoordHG.x, 0.5, 0, 0)).xyz;
 		float3 hgY = tex2Dlod(_cubicLookup, float4(vCoordHG.y, 0.5, 0, 0)).xyz;

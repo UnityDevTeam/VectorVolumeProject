@@ -35,12 +35,13 @@ namespace Assets.Editor.MVVReader
         public int size_y;
         public int size_z;
         public Matrix4x4 transform;
+        public Matrix4x4 aabb; // only evaluate sdf in there...
         public int type;
         int first_transform;
         int max_transform;
         // TODO seeded SDFs
 
-        public SDF(int[] index, int[] size, Matrix4x4 transform, int type, int first_transform, int max_transform)
+        public SDF(int[] index, int[] size, Matrix4x4 transform, Matrix4x4 aabb, int type, int first_transform, int max_transform)
         {
             this.index_x = index[0];
             this.index_y = index[1];
@@ -49,6 +50,7 @@ namespace Assets.Editor.MVVReader
             this.size_y = size[1];
             this.size_z = size[2];
             this.transform = transform;
+            this.aabb = aabb;
             this.type = type;
             this.first_transform = first_transform;
             this.max_transform = max_transform;
@@ -138,14 +140,14 @@ namespace Assets.Editor.MVVReader
             Node[] nodes_for_shader = new Node[128];
             SDF[] sdfs_for_shader = new SDF[32];
             Region[] regions_for_shader = new Region[32];
-            Instance[] instances_for_shader = new Instance[16384];
-            Indexcell[] indexcells_for_shader = new Indexcell[16384];
-            Matrix4x4[] transforms_for_shader = new Matrix4x4[16384];
+            Instance[] instances_for_shader = new Instance[65536];
+            Indexcell[] indexcells_for_shader = new Indexcell[65536];
+            Matrix4x4[] transforms_for_shader = new Matrix4x4[65536];
             Debug.Log("Passing MVV to shader...");
             mat.SetTexture("_VolumeAtlas", globalTexture);
-            int max_dim = Math.Max(globalTexture.depth, Math.Max(globalTexture.width, globalTexture.height));
+            //int max_dim = Math.Max(globalTexture.depth, Math.Max(globalTexture.width, globalTexture.height));
             //mat.SetVector("_VolumeAtlasSize", new Vector3(globalTexture.height, globalTexture.depth, globalTexture.width));
-            mat.SetVector("_VolumeAtlasSize", new Vector3(max_dim, max_dim, max_dim));
+            mat.SetVector("_VolumeAtlasSize", new Vector3(globalTexture.width, globalTexture.height, globalTexture.depth));
             mat.SetInt("_rootInstance", rootObject.index);
 
 
@@ -160,12 +162,15 @@ namespace Assets.Editor.MVVReader
 
                 foreach (MVVTreeNode node in nodeList)
                 {
+                    
                     if (node.isLeaf)
                     {
+                        Debug.Log("Region Node " + node.region.identifier + "(" + node.index + ")");
                         nodes_for_shader[node.index] = new Node(-1, -1, 1, -1, node.region.index);
                     }
                     else
                     {
+                        Debug.Log("SDF Node " + node.sdf.identifier + "(" + node.index + ")");
                         nodes_for_shader[node.index] = new Node(node.positive.index, node.negative.index, 0, node.sdf.index, -1);
                     }
                 }
@@ -174,6 +179,8 @@ namespace Assets.Editor.MVVReader
 
             foreach (MVVSDF sdf in sdfs.Values)
             {
+                Debug.Log("SDF " + sdf.identifier + "(" + sdf.index + "): " + sdf.file.sizes[0]+"," + sdf.file.sizes[1]+"," + sdf.file.sizes[2]);
+                
                 sdf.transform.createMatrix();
                 int start_transform = currentTransformIndex;
                 int max_transform = 0;
@@ -186,7 +193,9 @@ namespace Assets.Editor.MVVReader
                         transforms_for_shader[currentTransformIndex] = sdf.seedTransforms[currentTransformIndex - start_transform].matrix.inverse;
                     }
                 }
-                sdfs_for_shader[sdf.index] = new SDF(sdf.file.index, sdf.file.sizes, sdf.transform.matrix.inverse, (int)sdf.type, start_transform, max_transform);
+                sdf.file.aabb.createMatrix();
+                //Debug.Log(sdf.file.aabb.matrix.ToString());
+                sdfs_for_shader[sdf.index] = new SDF(sdf.file.index, sdf.file.sizes, sdf.transform.matrix.inverse, sdf.file.aabb.matrix.inverse, (int)sdf.type, start_transform, max_transform);
             }
 
             foreach (MVVRegion region in regions.Values)
@@ -197,9 +206,13 @@ namespace Assets.Editor.MVVReader
                 regionindex.embedded_indexed_objects = new List<MVVEmbedded>[1, 1, 1];
                 regionindex.embedded_indexed_objects[0, 0, 0] = new List<MVVEmbedded>();
 
+                Debug.Log(region.identifier + " Embedds: " + region.embedded_objects.Count);
+
                 // Now we create exaclty one index, for now...
                 foreach (MVVIndex ind in region.embedded_objects)
                 {
+                    ind.transform.createMatrix();
+                    Debug.Log(region.identifier + ": " + ind.transform.matrix.inverse.ToString());
                     if (ind.use_index)
                     {
                         // if we use index, assume this is the only object, for now...
@@ -214,12 +227,14 @@ namespace Assets.Editor.MVVReader
 
                 regionindex.transform.createMatrix();
 
+                Debug.Log(region.identifier + "(" + region.index + "): " + regionindex.transform.matrix.ToString());
+
                 if (region.embedded_objects.Count > 0)
                 {
                     regions_for_shader[region.index] = new Region((int)region.type, region.color, region.opacity, regionindex.index_size, regionindex.transform.matrix.inverse, currentIndexOffset, 1);
                 } else
                 {
-                    regions_for_shader[region.index] = new Region((int)region.type, region.color, region.opacity, regionindex.index_size, regionindex.transform.matrix.inverse, currentIndexOffset, 1);
+                    regions_for_shader[region.index] = new Region((int)region.type, region.color, region.opacity, regionindex.index_size, regionindex.transform.matrix.inverse, currentIndexOffset, 0);
                 }
 
 
@@ -257,8 +272,8 @@ namespace Assets.Editor.MVVReader
             }
 
 
-            Debug.Log("Index:" + sdfs["SKIN"].file.index[0] + "," + sdfs["SKIN"].file.index[1] + "," + sdfs["SKIN"].file.index[2]);
-            Debug.Log("Size:" + sdfs["SKIN"].file.sizes[0] + "," + sdfs["SKIN"].file.sizes[1] + "," + sdfs["SKIN"].file.sizes[2]);
+            Debug.Log("Index:" + sdfs["SECTION"].file.index[0] + "," + sdfs["SECTION"].file.index[1] + "," + sdfs["SECTION"].file.index[2]);
+            Debug.Log("Size:" + sdfs["SECTION"].file.sizes[0] + "," + sdfs["SECTION"].file.sizes[1] + "," + sdfs["SECTION"].file.sizes[2]);
 
             // Fill buffers
             GPUBuffer.Instance.NodeBuffer.SetData(nodes_for_shader);
@@ -278,8 +293,13 @@ namespace Assets.Editor.MVVReader
 
             Debug.Log("...done!");
 
-            // Creating Cubic Lookup Table (From Lvid Wang)
-            Debug.Log("Creating Cubic Lookup Table");
+            for (int i = 0; i < 100; i++)
+            {
+               // Debug.Log(instances_for_shader[i].transform.ToString() + ", --> , " + nodes_for_shader[instances_for_shader[i].rootnode].sdfId);
+            }
+
+                // Creating Cubic Lookup Table (From Lvid Wang)
+                Debug.Log("Creating Cubic Lookup Table");
 
             Color[] lookup_data = new Color[256];
 
@@ -307,10 +327,6 @@ namespace Assets.Editor.MVVReader
 
             mat.SetTexture("_cubicLookup", lookup);
 
-            foreach (MVVSDF sdf in sdfs.Values)
-            {
-                Debug.Log(sdf.identifier + ":" + sdf.file.sizes[0] + "," + sdf.file.sizes[1] + "," + sdf.file.sizes[2]);
-            }
 
         }
 
@@ -407,18 +423,19 @@ namespace Assets.Editor.MVVReader
 
             int smallestOfBiggest;
 
-            if (biggest[0] < biggest[1])
-                if (biggest[0] < biggest[2])
+            if (biggest[0] <= biggest[1])
+                if (biggest[0] <= biggest[2])
                     smallestOfBiggest = 0;
                 else
                     smallestOfBiggest = 2;
             else
-                if (biggest[1] < biggest[2])
+                if (biggest[1] <= biggest[2])
                     smallestOfBiggest = 1;
                 else
                     smallestOfBiggest = 2;
-            
+
             var indexpos = new int[] { 0, 0, 0 };
+
 
             for (int i = 0; i < sortedSDF.Count; i++)
             {
@@ -439,6 +456,7 @@ namespace Assets.Editor.MVVReader
             }
 
             Debug.Log("3D-Atlas size: " + dimension[0] + "," + dimension[1] + "," + dimension[2]);
+            Debug.Log("Direction: " + smallestOfBiggest);
 
             Color[] colors = new Color[dimension[0] * dimension[1] * dimension[2]];
             int currentSDF = 0;
@@ -455,7 +473,10 @@ namespace Assets.Editor.MVVReader
                         currentSDF++;
                     }
                 }
-                if (smallestOfBiggest == 1) currentSDF = 0; // Reset current for new run
+                if (smallestOfBiggest == 1)
+                {
+                    currentSDF = 0; // Reset current for new run
+                }
                 for (int y = 0; y < dimension[1]; y++)
                 {
                     if (smallestOfBiggest == 1)
@@ -465,16 +486,13 @@ namespace Assets.Editor.MVVReader
                             currentSDF++;
                         }
                     }
-                    if (smallestOfBiggest == 2) currentSDF = 0; // Reset current for new run
+                    if (smallestOfBiggest == 2)
+                    {
+                        currentSDF = 0; // Reset current for new run
+                    }
                     for (int z = 0; z < dimension[2]; z++)
                     {
-                        if (currentSDF > sortedSDF.Count - 1)
-                        {
-                            // Okay, no more sdfs...
-                            colors[linearIndex].a = 1f;
-                            continue;
-
-                        }
+                        linearIndex = x + y*dimension[0] + z*dimension[0]*dimension[1];
                         if (smallestOfBiggest == 2)
                         {
                             //Check if we are in correct sdf...
@@ -484,15 +502,24 @@ namespace Assets.Editor.MVVReader
                             }
                         }
 
+                        if (currentSDF > sortedSDF.Count - 1)
+                        {
+                            // Okay, no more sdfs...
+                            colors[linearIndex].a = 1f;
+                            //linearIndex++;
+                            continue;
+
+                        }
+
                         if (z < sortedSDF[currentSDF].index[2] + sortedSDF[currentSDF].sizes[2] &&
                             y < sortedSDF[currentSDF].index[1] + sortedSDF[currentSDF].sizes[1] &&
                             x < sortedSDF[currentSDF].index[0] + sortedSDF[currentSDF].sizes[0] )
                         {
                             // We are in current sdf
                             // Calculate local index;
-                            localLinearIndex = (z - sortedSDF[currentSDF].index[2]) +
-                                               (y - sortedSDF[currentSDF].index[1]) * sortedSDF[currentSDF].sizes[2] +
-                                               (x - sortedSDF[currentSDF].index[0]) * sortedSDF[currentSDF].sizes[1] * sortedSDF[currentSDF].sizes[2];
+                            localLinearIndex = (x - sortedSDF[currentSDF].index[0]) +
+                                               (y - sortedSDF[currentSDF].index[1]) * sortedSDF[currentSDF].sizes[0] +
+                                               (z - sortedSDF[currentSDF].index[2]) * sortedSDF[currentSDF].sizes[1] * sortedSDF[currentSDF].sizes[0];
                             try
                             {
                                 colors[linearIndex] = sortedSDF[currentSDF].volumeColors[localLinearIndex];
@@ -510,14 +537,13 @@ namespace Assets.Editor.MVVReader
                         {
                             colors[linearIndex].a = 1f;
                         }
-                        linearIndex++;
                     }
                 }
             }
 
             globalTexture = new Texture3D(dimension[0], dimension[1], dimension[2], TextureFormat.Alpha8, true);
             globalTexture.SetPixels(colors);
-            globalTexture.filterMode = FilterMode.Point;
+            globalTexture.filterMode = FilterMode.Trilinear;
             globalTexture.anisoLevel = 0;
             globalTexture.Apply();
 
@@ -738,9 +764,9 @@ namespace Assets.Editor.MVVReader
                         }
                     }
                     Debug.Log("Building Index for " + region.identifier);
-                    // TODO: Reactivate!
-                    //index.buildIndex();
+                    index.buildIndex();
                     Debug.Log("Done.");
+                    region.embedded_objects.Add(index);
                 }
             }
         }

@@ -30,7 +30,14 @@ namespace Assets.Editor.MVVReader
         /// <returns>MVVSDFFile that has been generated</returns>
         public MVVSDFFile loadSDF(string path)
         {
-            file = new MVVSDFFile(File.ReadAllBytes(path));
+            if (path.EndsWith(".obj"))
+            {
+                file = new MVVSDFFile(File.ReadAllBytes(path), true);
+            }
+            else
+            {
+                file = new MVVSDFFile(File.ReadAllBytes(path), false);
+            }
             return file;
         }
 

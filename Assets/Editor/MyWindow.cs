@@ -127,6 +127,8 @@ class CellUnityWindow : EditorWindow
             Color[] volumeColors = new Color[linearsize];
             String line;
 
+            Debug.Log("Size:" + sizeFromFile[0] + ", " + sizeFromFile[1] + ", " + sizeFromFile[2]);
+
             float min = float.MaxValue;
             float max = float.MinValue;
 
@@ -165,7 +167,7 @@ class CellUnityWindow : EditorWindow
                 }
             }
             //bring in range 0..1 with a 0.5 isosurface
-            if (max < 0) { max = 0; }
+            /*if (max < 0) { max = 0; }
             if (min > 0) { min = 0; }
 
             var max2 = max * 2;
@@ -186,6 +188,14 @@ class CellUnityWindow : EditorWindow
                 {
                     volumeColors[i].a = 0.5f - volumeColors[i].a / min2;
                 }
+            }*/
+            var minmax = max - min;
+
+            for (int i = 0; i < linearsize; i++)
+            {
+                if (volumeColors[i].a == float.MaxValue) volumeColors[i].a = max;
+
+                volumeColors[i].a =  (volumeColors[i].a - min) / minmax ;
             }
 
 
@@ -225,10 +235,38 @@ class CellUnityWindow : EditorWindow
 
             //StreamReader file = new StreamReader(path);
 
-            MVVSDFFile sdf = new MVVSDFFile(File.ReadAllBytes(path));
+            MVVSDFFile sdf = new MVVSDFFile(File.ReadAllBytes(path), false);
 
-            Texture3D texture3D = new Texture3D(sdf.sizes[0], sdf.sizes[1], sdf.sizes[2], TextureFormat.Alpha8, false);
-            texture3D.SetPixels(sdf.volumeColors);
+            var dim = new int[3];
+
+            for (int i = 0; i < 3; i++)
+            {
+                dim[i] = (int)Math.Pow(2, Math.Ceiling(Math.Log(sdf.sizes[i], 2)));
+            }
+
+            Texture3D texture3D = new Texture3D(dim[0], dim[1], dim[2], TextureFormat.Alpha8, false);
+            var data = new Color[dim[0] * dim[1] * dim[2]];
+            for (int x = 0; x < dim[0]; x++)
+            {
+                for (int y = 0; y < dim[1]; y++)
+                {
+                    for (int z = 0; z < dim[2]; z++)
+                    {
+                        var idx = z + dim[1] * y + dim[1] * dim[2] * x;
+                        var idx2 = z + sdf.sizes[1] * y + sdf.sizes[1] * sdf.sizes[2] * x;
+                        if (idx2 < sdf.volumeColors.Length)
+                        {
+                            var stuff = sdf.volumeColors[idx2].a;
+                            data[idx].a = stuff;
+                        }
+                        else
+                        {
+                            data[idx].a = 1.0f;
+                        }
+                    }
+                }
+            }
+            texture3D.SetPixels(data);
             texture3D.filterMode = FilterMode.Bilinear;
             switch (sdf.addressMode)
             {

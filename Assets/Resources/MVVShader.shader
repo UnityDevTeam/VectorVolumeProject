@@ -24,6 +24,7 @@
 		int3 index;
 		int3 size;
 		float4x4 transform;
+		float4x4 aabb;
 		int type;
 		int first_transform;
 		int max_transform;
@@ -160,29 +161,37 @@
 
 		return value000;
 	}
-
-	// Sample volume at position p, with index and size of actual texture
-	float sample_volume( float3 p, int3 index, int3 size )
-	{	
-		index = int3(index.y, index.z, index.x);
-		// point is between -1..1 in every direction
-		// put between 0..1
-		p = p/2.0f+0.5f.xxx;
-		//colorr = float4(p, 1);
-		//transform point in image space
-		p = float3(p.y, p.z, p.x);
-		
-		float3 new_p = index / float3(_VolumeAtlasSize)+(size / float3(_VolumeAtlasSize))*p;
-		return sample_volume_cubic(new_p);
-	}
-
-
+	
 	// Check if point is in standard cube (-1,-1,-1),(1,1,1)
 	bool isCoordValid(float3 p) {
 		return (p.x <= 1 && p.x >= -1 &&
 			p.y <= 1 && p.y >= -1 &&
 			p.z <= 1 && p.z >= -1);
 	}
+
+	// Sample volume at position p, with index and size of actual texture
+	float sample_volume( float3 p, int3 index, int3 size, float4x4 trans )
+	{	
+		
+		// Other axis in unity...
+		//p = float3(p.y, p.z, p.x);
+		
+		p = transform(p, trans);
+		if (isCoordValid(p) == false) {
+			return 1;
+		}
+		
+		//size = int3(size.y, size.z, size.x);
+		//index = int3(index.y, index.z, index.x);
+		// point is between -1..1 in every direction
+		// put between 0..1
+		p = p/2.0f+0.5f.xxx;
+		
+		float3 new_p = index / float3(_VolumeAtlasSize)+(size / float3(_VolumeAtlasSize))*p;
+		return sample_volume_cubic(new_p);
+	}
+
+
 
 	// Sample volume at psoition p for sdf with Id sdfId
 	float sample_volume(float3 p, SDF sdf) {
@@ -192,17 +201,18 @@
 			if (isCoordValid(p) == false) {
 				return 1;
 			}
-			return sample_volume(p, sdf.index, sdf.size);
+			return sample_volume(p, sdf.index, sdf.size, sdf.aabb);
 		}
 		//seed
 		if (sdf.type == 1) {
+			float mini = 1.0f;
 			for (int i = sdf.first_transform; i < sdf.first_transform + sdf.max_transform; i++)
 			{
 				float3 newP = transform(p, transformBuffer[i]);
 				// Check range
 				if (isCoordValid(newP))
 				{
-					return sample_volume(newP, sdf.index, sdf.size);
+					mini = min(sample_volume(newP, sdf.index, sdf.size, sdf.aabb), mini);
 				}
 			}
 			return 1;
@@ -215,7 +225,7 @@
 			//Transform back;
 			p = p-0.5f;
 			p = p*2.0f;
-			return sample_volume(p, sdf.index, sdf.size);
+			return sample_volume(p, sdf.index, sdf.size, sdf.aabb);
 		}
 		return 1;
 	}
@@ -255,15 +265,17 @@
 		Instance inst = instanceBuffer[i];
 		Node node = nodeBuffer[inst.rootnode];
 		float3 p = input.worldPos;
+		//p = float3(p.x,p.z,p.y);
+		//p = float3(p.y, p.z, p.x);
 		p = transform(p, inst.transform);
 		float3 oldP = p;
 
 		float3 indexP = p;
 		int linear_index; //The linear index of the embeddedobjects start/length of the index z+y*size_z+x*size_z*size_y
-
+		float4 cur_col;
 
 		for (int b = 0; b < 512; b++) {
-			if (in_embedded == current_in_embedded && isCoordValid(p) == false) {
+			if (isCoordValid(p) == false) {
 				i++;
 				if (i >= current_embedded_index + current_embedded_length) {
 					// No more embedded objects here -> return region color
@@ -275,9 +287,9 @@
 				continue;
 			}
 
-			current_in_embedded--; // We don't want to look for embedded objects, because we are already in a correct one...
-
-			if (sample_volume(p, sdfBuffer[node.sdfId]) > 0) {
+			//current_in_embedded--; // We don't want to look for embedded objects, because we are already in a correct one...
+			
+			if (sample_volume(p, sdfBuffer[node.sdfId]) > 0.51) {
 				node = nodeBuffer[node.positiveId];
 			}
 			else {
@@ -289,8 +301,8 @@
 				Region r = regionBuffer[node.regionId];
 				if (r.embedded == 0) {
 					// No embedding
-					color = get_color(r, p);
-					if (color.x == -1) {
+					cur_col = get_color(r, p);
+					if (cur_col.x < 0) {
 						// We are in an empty object, check for embedd
 						i++;
 						if (i >= current_embedded_index + current_embedded_length) {
@@ -301,7 +313,10 @@
 						node = nodeBuffer[inst.rootnode];
 						p = transform(oldP, inst.transform);
 					}
-					else break;
+					else {
+						color = cur_col;
+						break;
+					}
 				}
 				else {
 					// Embedded objects
@@ -309,13 +324,11 @@
 					//First check where we are in index
 					indexP = transform(p, r.index_transform);
 
-					if (indexP.x < -1 || indexP.x > 1 ||
-						indexP.y < -1 || indexP.y > 1 ||
-						indexP.z < -1 || indexP.z > 1) {
+					if (!isCoordValid(indexP)) {
 						// No embedded will be in index, just quit now
 						break;
 					}
-
+					
 					// indexP is now in (-1,-1,-1)x(1,1,1) of index, time to check correct ccordinate
 					// get in range 0..0.999
 					indexP = smoothstep(float3(-1, -1, -1), float3(1.0001, 1.0001, 1.0001),indexP);
@@ -326,6 +339,14 @@
 
 					current_embedded_index = indexcellBuffer[r.index_offset + linear_index].instance;
 
+					if (node.regionId == 3){
+						//color = float4(indexP.z/2.0f+0.5f,indexP.z/2.0f+0.5f,indexP.z/2.0f+0.5f,1); 
+						color = float4((float)((int)(r.index_size.x*indexP.x))/(float)r.index_size.x,(float)((int)(r.index_size.y*indexP.y))/(float)r.index_size.y,(float)((int)(r.index_size.z*indexP.z))/(float)r.index_size.z,1); 
+						//float indsize = r.index_size.x*r.index_size.y*r.index_size.z;
+						//color = float4(linear_index*10/indsize,linear_index*10/indsize,linear_index*10/indsize,1); 
+						//return;
+					}
+					
 					if (current_embedded_index < 0) {
 						//No embedds
 						break;
@@ -339,8 +360,8 @@
 					node = nodeBuffer[inst.rootnode];
 					p = transform(p, inst.transform);
 
-					in_embedded++;
-					current_in_embedded = in_embedded;
+					//in_embedded++;
+					//current_in_embedded = in_embedded;
 				}
 			}
 
