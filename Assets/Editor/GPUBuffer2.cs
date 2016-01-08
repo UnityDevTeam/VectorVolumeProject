@@ -9,9 +9,9 @@ public class GPUBuffer : MonoBehaviour
     public static int NumNodes = 128;
     public static int NumSDFs = 32;
     public static int NumRegions = 32;
-    public static int NumInstances = 65536;
-    public static int NumIndices = 65536;
-    public static int NumTransforms = 65536;
+    public static int NumInstances = 262144;
+    public static int NumIndices = 262144;
+    public static int NumTransforms = 262144;
 
     //MVV Buffers //
 

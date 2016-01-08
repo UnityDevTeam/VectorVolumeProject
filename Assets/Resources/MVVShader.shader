@@ -331,7 +331,7 @@
 					
 					// indexP is now in (-1,-1,-1)x(1,1,1) of index, time to check correct ccordinate
 					// get in range 0..0.999
-					indexP = smoothstep(float3(-1, -1, -1), float3(1.0001, 1.0001, 1.0001),indexP);
+					indexP = indexP/2 + 0.5 - 0.001;
 					linear_index = (int)(r.index_size.x*indexP.x) * r.index_size.z * r.index_size.y +
 					    		   (int)(r.index_size.y*indexP.y) * r.index_size.z +
 								   (int)(r.index_size.z*indexP.z);
@@ -339,13 +339,6 @@
 
 					current_embedded_index = indexcellBuffer[r.index_offset + linear_index].instance;
 
-					if (node.regionId == 3){
-						//color = float4(indexP.z/2.0f+0.5f,indexP.z/2.0f+0.5f,indexP.z/2.0f+0.5f,1); 
-						color = float4((float)((int)(r.index_size.x*indexP.x))/(float)r.index_size.x,(float)((int)(r.index_size.y*indexP.y))/(float)r.index_size.y,(float)((int)(r.index_size.z*indexP.z))/(float)r.index_size.z,1); 
-						//float indsize = r.index_size.x*r.index_size.y*r.index_size.z;
-						//color = float4(linear_index*10/indsize,linear_index*10/indsize,linear_index*10/indsize,1); 
-						//return;
-					}
 					
 					if (current_embedded_index < 0) {
 						//No embedds

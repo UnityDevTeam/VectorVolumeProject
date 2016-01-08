@@ -140,9 +140,9 @@ namespace Assets.Editor.MVVReader
             Node[] nodes_for_shader = new Node[128];
             SDF[] sdfs_for_shader = new SDF[32];
             Region[] regions_for_shader = new Region[32];
-            Instance[] instances_for_shader = new Instance[65536];
-            Indexcell[] indexcells_for_shader = new Indexcell[65536];
-            Matrix4x4[] transforms_for_shader = new Matrix4x4[65536];
+            Instance[] instances_for_shader = new Instance[262144];
+            Indexcell[] indexcells_for_shader = new Indexcell[262144];
+            Matrix4x4[] transforms_for_shader = new Matrix4x4[262144];
             Debug.Log("Passing MVV to shader...");
             mat.SetTexture("_VolumeAtlas", globalTexture);
             //int max_dim = Math.Max(globalTexture.depth, Math.Max(globalTexture.width, globalTexture.height));

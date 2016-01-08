@@ -48,7 +48,7 @@ namespace Assets.Editor.MVVReader
             for (int i = 0; i < seedPositions.Length; i++)
             {
                 MVVTransform transform = new MVVTransform();
-                transform.position = seedPositions[i] + globalTransform.position;
+                transform.position = seedPositions[i]*2 + globalTransform.position;
                 transform.rotation = globalTransform.rotation;
                 transform.scale = globalTransform.scale;
                 if (seedRotations != null) transform.rotation = seedRotations[i] + transform.rotation;
@@ -148,7 +148,10 @@ namespace Assets.Editor.MVVReader
                 // find min/max
                 for (int i = 0; i < 8; i++)
                 {
-                    Vector3 tmp = Vector3.Scale(p[i], new Vector3(index_size[0] / 2, index_size[1] / 2, index_size[2] / 2)) + new Vector3(index_size[0] / 2, index_size[1] / 2, index_size[2] / 2);
+                    // p[i] is in is now in (-1,-1,-1)x(1,1,1) of index, time to check correct ccordinate
+                    // get in range 0..0.999
+                    p[i] = p[i]/2.0f + new Vector3(0.499f, 0.499f, 0.499f);
+                    Vector3 tmp = Vector3.Scale(p[i], new Vector3(index_size[0], index_size[1], index_size[2]));
                     int x_cur = (int)Math.Floor(tmp.x);
                     int y_cur = (int)Math.Floor(tmp.y);
                     int z_cur = (int)Math.Floor(tmp.z);
