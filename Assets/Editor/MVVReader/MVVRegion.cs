@@ -18,7 +18,10 @@ namespace Assets.Editor.MVVReader
         public int index;
         public string identifier;   // Unique Name
         public MVVRegionType type;  // Type of Region
+        public string image_file;
         public Texture2D image;     // For type Bitmap
+        public float[] imageIndex = new float[2];
+        public float[] imageSize = new float[2];
         public Color color;         // For type Color
         public float opacity = 1.0f;// Overrides color
         public MVVTransform transform; // For Bitmap transform

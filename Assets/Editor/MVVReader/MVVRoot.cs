@@ -64,7 +64,11 @@ namespace Assets.Editor.MVVReader
         public float opacity;
         // TODO textures
         // public Vector3 scale;
-
+        public float index_x;
+        public float index_y;
+        public float size_x;
+        public float size_y;
+        public Matrix4x4 bitmap_transform;
         // For now only support one index
         // if no index is used, define 1x1x1 index
         public int embedded;
@@ -74,7 +78,7 @@ namespace Assets.Editor.MVVReader
         public Matrix4x4 index_transform;
         public int index_offset;
 
-        public Region(int type, Color color, float opacity, int[] index_size, Matrix4x4 index_transform, int index_offset, int embedded)
+        public Region(int type, Color color, float opacity, int[] index_size, Matrix4x4 index_transform, int index_offset, int embedded, float[] index, float[] size, Matrix4x4 bitmap_transform)
         {
             this.type = type;
             this.color = new Vector3(color.r, color.g, color.b);
@@ -85,6 +89,11 @@ namespace Assets.Editor.MVVReader
             this.index_transform = index_transform;
             this.index_offset = index_offset;
             this.embedded = embedded;
+            this.index_x = index[0];
+            this.index_y = index[1];
+            this.size_x = size[0];
+            this.size_y = size[1];
+            this.bitmap_transform = bitmap_transform;
 
         }
     }
@@ -134,6 +143,8 @@ namespace Assets.Editor.MVVReader
         private int currentIndexOffset = 0;
         private int currentTransformIndex = 0;
 
+        public Texture2D globalBitmapTexture;
+
 
         public void passToShader(Material mat)
         {
@@ -149,6 +160,8 @@ namespace Assets.Editor.MVVReader
             //mat.SetVector("_VolumeAtlasSize", new Vector3(globalTexture.height, globalTexture.depth, globalTexture.width));
             mat.SetVector("_VolumeAtlasSize", new Vector3(globalTexture.width, globalTexture.height, globalTexture.depth));
             mat.SetInt("_rootInstance", rootObject.index);
+
+            mat.SetTexture("_BitmapAtlas", globalBitmapTexture);
 
 
             Debug.Log("...creating Buffers");
@@ -187,14 +200,16 @@ namespace Assets.Editor.MVVReader
                 if (sdf.seedTransforms != null && sdf.seedTransforms.Length > 0)
                 {
                     max_transform = sdf.seedTransforms.Length;
-                    for (; currentTransformIndex < start_transform + sdf.seedTransforms.Length; currentTransformIndex++)
+                    for (; currentTransformIndex < start_transform + max_transform; currentTransformIndex++)
                     {
                         sdf.seedTransforms[currentTransformIndex - start_transform].createMatrix();
                         transforms_for_shader[currentTransformIndex] = sdf.seedTransforms[currentTransformIndex - start_transform].matrix.inverse;
+                        //if (currentTransformIndex < 10) Debug.Log(transforms_for_shader[currentTransformIndex] + ", " + sdf.seedTransforms[currentTransformIndex - start_transform].matrix);
+                            //Debug.Log(sdf.identifier + ": " + sdf.seedTransforms[currentTransformIndex - start_transform].scale.ToString() + ", " + sdf.seedTransforms[currentTransformIndex - start_transform].rotation.ToString() + ", " + sdf.seedTransforms[currentTransformIndex - start_transform].position.ToString());
                     }
                 }
                 sdf.file.aabb.createMatrix();
-                //Debug.Log(sdf.file.aabb.matrix.ToString());
+                Debug.Log(start_transform + ", " + max_transform);
                 sdfs_for_shader[sdf.index] = new SDF(sdf.file.index, sdf.file.sizes, sdf.transform.matrix.inverse, sdf.file.aabb.matrix.inverse, (int)sdf.type, start_transform, max_transform);
             }
 
@@ -229,12 +244,14 @@ namespace Assets.Editor.MVVReader
 
                 Debug.Log(region.identifier + "(" + region.index + "): " + regionindex.transform.matrix.ToString());
 
+                region.transform.createMatrix();
+
                 if (region.embedded_objects.Count > 0)
                 {
-                    regions_for_shader[region.index] = new Region((int)region.type, region.color, region.opacity, regionindex.index_size, regionindex.transform.matrix.inverse, currentIndexOffset, 1);
+                    regions_for_shader[region.index] = new Region((int)region.type, region.color, region.opacity, regionindex.index_size, regionindex.transform.matrix.inverse, currentIndexOffset, 1, region.imageIndex, region.imageSize, region.transform.matrix);
                 } else
                 {
-                    regions_for_shader[region.index] = new Region((int)region.type, region.color, region.opacity, regionindex.index_size, regionindex.transform.matrix.inverse, currentIndexOffset, 0);
+                    regions_for_shader[region.index] = new Region((int)region.type, region.color, region.opacity, regionindex.index_size, regionindex.transform.matrix.inverse, currentIndexOffset, 0, region.imageIndex, region.imageSize, region.transform.matrix);
                 }
 
 
@@ -290,12 +307,13 @@ namespace Assets.Editor.MVVReader
             mat.SetBuffer("regionBuffer", GPUBuffer.Instance.RegionBuffer);
             mat.SetBuffer("indexcellBuffer", GPUBuffer.Instance.IndexcellBuffer);
             mat.SetBuffer("instanceBuffer", GPUBuffer.Instance.InstanceBuffer);
+            mat.SetBuffer("transformBuffer", GPUBuffer.Instance.TransformBuffer);
 
             Debug.Log("...done!");
 
             for (int i = 0; i < 100; i++)
             {
-               // Debug.Log(instances_for_shader[i].transform.ToString() + ", --> , " + nodes_for_shader[instances_for_shader[i].rootnode].sdfId);
+                //Debug.Log(transforms_for_shader[i].ToString());
             }
 
                 // Creating Cubic Lookup Table (From Lvid Wang)
@@ -397,10 +415,42 @@ namespace Assets.Editor.MVVReader
 
             // Loaded everything, bin packing texture
             polulateTexture();
+            populateBitmapTexture();
             Debug.Log("Finished loading. Set root object to " + rootObject.identifier);
             
 
             return true;
+        }
+
+        private void populateBitmapTexture()
+        {
+            Dictionary<string, int> nameList = new Dictionary<string,int>();
+            Texture2D[] textureList = new Texture2D[regionTextures.Count];
+
+            var i = 0;
+
+            foreach (KeyValuePair<string, Texture2D> tex in regionTextures)
+            {
+                nameList[tex.Key] = i;
+                textureList[i] = tex.Value;
+                i++;
+            }
+
+            globalBitmapTexture = new Texture2D(1, 1);
+            Rect[] erg = globalBitmapTexture.PackTextures(textureList, 2);
+
+            foreach (KeyValuePair<string, MVVRegion> region in regions)
+            {
+                if (region.Value.image_file != null && nameList.ContainsKey(region.Value.image_file)){
+                    i = nameList[region.Value.image_file];
+                    region.Value.imageIndex[0] = erg[i].min[0];
+                    region.Value.imageIndex[1] = erg[i].min[1];
+                    region.Value.imageSize[0] = erg[i].width;
+                    region.Value.imageSize[1] = erg[i].height;
+                }
+            }
+            
+
         }
 
         private void polulateTexture()
@@ -664,6 +714,7 @@ namespace Assets.Editor.MVVReader
                     region.loadImage(rootPath);
                     regionTextures.Add(rootPath, region.image);
                 }
+                region.image_file = rootPath;
             }
             // Loading texture END
 
@@ -804,6 +855,10 @@ namespace Assets.Editor.MVVReader
             }
             // Loading texture END
 
+            // Loading Transformations BEGIN
+            sdf.transform = getMVVTransform(childNode);
+            // Loading Transformations END
+
             // Loading Seed Stuff BEGIN
             if (childNode.Attributes["seedFile"] != null)
             {
@@ -849,9 +904,6 @@ namespace Assets.Editor.MVVReader
             }
             // Loading Seed Stuff END
 
-            // Loading Transformations BEGIN
-            sdf.transform = getMVVTransform(childNode);
-            // Loading Transformations END
 
             sdf.type = MVVSDFType.DEFAULT;
             if (childNode.Attributes["type"] != null)

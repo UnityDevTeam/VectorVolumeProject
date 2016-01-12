@@ -37,7 +37,9 @@
 		float opacity;
 		// TODO textures
 		// public Vector3 scale;
-
+		float2 index;
+		float2 size;
+		float4x4 bitmap_transform;
 		// For now only support one index
 		// if no index is used, define 1x1x1 index
         int embedded;
@@ -61,6 +63,8 @@
 	uniform sampler3D _VolumeAtlas; // Atlas of all SDFs...
 	uniform int3 _VolumeAtlasSize; // Size of Atlas for calculation...
 	uniform int _rootInstance; // ID of First instance
+	
+	uniform sampler2D _BitmapAtlas;
 
 	uniform StructuredBuffer<Node> nodeBuffer;
 	uniform StructuredBuffer<SDF> sdfBuffer;
@@ -170,16 +174,9 @@
 	}
 
 	// Sample volume at position p, with index and size of actual texture
-	float sample_volume( float3 p, int3 index, int3 size, float4x4 trans )
+	float sample_volume( float3 p, int3 index, int3 size)
 	{	
-		
-		// Other axis in unity...
-		//p = float3(p.y, p.z, p.x);
-		
-		p = transform(p, trans);
-		if (isCoordValid(p) == false) {
-			return 1;
-		}
+	
 		
 		//size = int3(size.y, size.z, size.x);
 		//index = int3(index.y, index.z, index.x);
@@ -195,13 +192,14 @@
 
 	// Sample volume at psoition p for sdf with Id sdfId
 	float sample_volume(float3 p, SDF sdf) {
-		p = transform(p, sdf.transform);
 		if (sdf.type == 0) {
+			p = transform(p, sdf.transform);
+			p = transform(p, sdf.aabb);
 			// If p not in standard cube, return high value...
 			if (isCoordValid(p) == false) {
 				return 1;
 			}
-			return sample_volume(p, sdf.index, sdf.size, sdf.aabb);
+			return sample_volume(p, sdf.index, sdf.size);
 		}
 		//seed
 		if (sdf.type == 1) {
@@ -209,23 +207,32 @@
 			for (int i = sdf.first_transform; i < sdf.first_transform + sdf.max_transform; i++)
 			{
 				float3 newP = transform(p, transformBuffer[i]);
+				newP = transform(newP, sdf.aabb);
+				
 				// Check range
 				if (isCoordValid(newP))
 				{
-					mini = min(sample_volume(newP, sdf.index, sdf.size, sdf.aabb), mini);
+					//return 0;
+					//return sample_volume(newP, sdf.index, sdf.size);
+					mini = min(sample_volume(newP, sdf.index, sdf.size), mini);
 				}
 			}
-			return 1;
+			return mini;
 		}
 		//Tiling
 		if (sdf.type == 2) {
+			p = transform(p, sdf.transform);
 			//Transform point to 0..1
 			p = p/2.0f+0.5f.xxx;
 			p = p - floor(p);
 			//Transform back;
 			p = p-0.5f;
 			p = p*2.0f;
-			return sample_volume(p, sdf.index, sdf.size, sdf.aabb);
+			p = transform(p, sdf.aabb);
+			if (isCoordValid(p) == false) {
+				return 1;
+			}
+			return sample_volume(p, sdf.index, sdf.size);
 		}
 		return 1;
 	}
@@ -239,8 +246,11 @@
 		}
 		else if (region.type == 1) {
 			// bitmap:
-			// TODO
-			return float4(1, 0, 0, 1);// region.opacity);
+			p = transform(p, region.bitmap_transform);
+			p = p/2.0f+0.5f.xxx;
+			p = p - floor(p);
+			p = float3(region.index,0) + float3(region.size,0)*p;
+			return float4(tex2Dlod(_BitmapAtlas, float4(p, 0)).xyz,1);// region.opacity);
 		}
 		else if (region.type == 2) {
 			// color

@@ -54,7 +54,12 @@ class CellUnityWindow : EditorWindow
         static void LoadMVVObject()
         {
             MVVRoot obj = new MVVRoot();
-            obj.readFromFile("C:\\Users\\orakeldel\\Documents\\Uni\\Ideen\\Ivan\\orange\\orange_nobitmap.xml", "ORANGE");
+            var path = EditorUtility.OpenFilePanel(
+                    "XML file",
+                    "",
+                    "xml");
+            //obj.readFromFile("C:\\Users\\orakeldel\\Documents\\Uni\\Ideen\\Ivan\\orange\\orange2.xml", "ORANGE");
+            obj.readFromFile(path, "ORANGE");
             obj.passToShader(Selection.activeGameObject.GetComponent<Renderer>().sharedMaterial);
         }
 

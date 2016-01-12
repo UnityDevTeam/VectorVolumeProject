@@ -50,7 +50,9 @@ namespace Assets.Editor.MVVReader
             var seedList = MVVSeedHelper.loadSeedFile(path);
             seedTransforms = new MVVTransform[seedList.Length];
             for (int i = 0; i < seedList.Length; i++){
-                seedTransforms[i] = new MVVTransform(seedList[i]);
+                seedTransforms[i] = new MVVTransform(seedList[i]*2 + transform.position);
+                seedTransforms[i].rotation = transform.rotation;
+                seedTransforms[i].scale = transform.scale;
             }
         }
 
@@ -64,7 +66,7 @@ namespace Assets.Editor.MVVReader
             var seedList = MVVSeedHelper.loadSeedFile(path);
             for (int i = 0; i < seedList.Length; i++)
             {
-                seedTransforms[i].rotation = seedList[i];
+                seedTransforms[i].rotation += seedList[i];
             }
         }
 
@@ -79,7 +81,8 @@ namespace Assets.Editor.MVVReader
             var seedList = MVVSeedHelper.loadSeedFile(path);
             for (int i = 0; i < seedList.Length; i++)
             {
-                seedTransforms[i].scale = seedList[i];
+                seedTransforms[i].scale.Scale(seedList[i]);
+                
             }
 
         }
