@@ -27,6 +27,7 @@ namespace Assets.Editor.MVVReader
 
         // AABD: Stores the bounding box as aabb
         public MVVTransform aabb;
+        public MVVVolume volume;
 
 
         private int linearSize;                 // Just for array-building
@@ -98,6 +99,7 @@ namespace Assets.Editor.MVVReader
             }
 
             aabb = new MVVTransform();
+            volume = this.getVolume();
 
         }
 
@@ -123,7 +125,7 @@ namespace Assets.Editor.MVVReader
             bboxMax[1] = BitConverter.ToSingle(bytes, 80);
             bboxMax[2] = BitConverter.ToSingle(bytes, 84);
 
-            Debug.Log("Bounding Box: " + bboxMin[0] + ", " + bboxMin[1] + ", " + bboxMin[2] + " ---> " + bboxMax[0] + ", " + bboxMax[1] + ", " + bboxMax[2]);
+            //Debug.Log("Bounding Box: " + bboxMin[0] + ", " + bboxMin[1] + ", " + bboxMin[2] + " ---> " + bboxMax[0] + ", " + bboxMax[1] + ", " + bboxMax[2]);
 
             for (int i = 88; i < 128; i += 4)
             {
@@ -156,13 +158,23 @@ namespace Assets.Editor.MVVReader
             aabb = new MVVTransform();
             aabb.position = new Vector3(bboxMin[0] + diffX, bboxMin[1] + diffY, bboxMin[2] + diffZ);
             aabb.scale = new Vector3(diffX, diffY, diffZ);
-            Debug.Log("Box: " + "(" + bboxMax[0] + ", " + bboxMax[1] + ", " + bboxMax[2] + ") - (" + bboxMin[0] + ", " + bboxMin[1] + ", " + bboxMin[2] + ")");
-            Debug.Log("Box: " + "(" + aabb.position[0] + ", " + aabb.position[1] + ", " + aabb.position[2] + ") - (" + aabb.scale[0] + ", " + aabb.scale[1] + ", " + aabb.scale[2] + ")");
+            //Debug.Log("Box: " + "(" + bboxMax[0] + ", " + bboxMax[1] + ", " + bboxMax[2] + ") - (" + bboxMin[0] + ", " + bboxMin[1] + ", " + bboxMin[2] + ")");
+            //Debug.Log("Box: " + "(" + aabb.position[0] + ", " + aabb.position[1] + ", " + aabb.position[2] + ") - (" + aabb.scale[0] + ", " + aabb.scale[1] + ", " + aabb.scale[2] + ")");
+            volume = this.getVolume();
         }
 
         public int CompareTo(object obj)
         {
             return this.sizes[0] * this.sizes[1] * this.sizes[2] - ((MVVSDFFile)obj).sizes[0] * ((MVVSDFFile)obj).sizes[1] * ((MVVSDFFile)obj).sizes[2];
+        }
+
+        public MVVVolume getVolume()
+        {
+            MVVVolume volume = new MVVVolume();
+            volume.aabb = this.aabb;
+            volume.colors = this.volumeColors;
+            volume.dimension = new int[] { sizes[0], sizes[1], sizes[2] };
+            return volume;
         }
     }
 }

@@ -21,8 +21,8 @@
 
 	struct SDF
 	{
-		int3 index;
-		int3 size;
+		float3 index;
+		float3 size;
 		float4x4 transform;
 		float4x4 aabb;
 		int type;
@@ -37,8 +37,8 @@
 		float opacity;
 		// TODO textures
 		// public Vector3 scale;
-		float2 index;
-		float2 size;
+		float3 index;
+		float3 size;
 		float4x4 bitmap_transform;
 		// For now only support one index
 		// if no index is used, define 1x1x1 index
@@ -64,7 +64,7 @@
 	uniform int3 _VolumeAtlasSize; // Size of Atlas for calculation...
 	uniform int _rootInstance; // ID of First instance
 	
-	uniform sampler2D _BitmapAtlas;
+	uniform sampler3D _BitmapAtlas;
 
 	uniform StructuredBuffer<Node> nodeBuffer;
 	uniform StructuredBuffer<SDF> sdfBuffer;
@@ -174,7 +174,7 @@
 	}
 
 	// Sample volume at position p, with index and size of actual texture
-	float sample_volume( float3 p, int3 index, int3 size)
+	float sample_volume( float3 p, float3 index, float3 size)
 	{	
 	
 		
@@ -184,7 +184,8 @@
 		// put between 0..1
 		p = p/2.0f+0.5f.xxx;
 		
-		float3 new_p = index / float3(_VolumeAtlasSize)+(size / float3(_VolumeAtlasSize))*p;
+		//float3 new_p = index / float3(_VolumeAtlasSize)+(size / float3(_VolumeAtlasSize))*p;
+		float3 new_p = index + size*p;
 		return sample_volume_cubic(new_p);
 	}
 
@@ -246,11 +247,21 @@
 		}
 		else if (region.type == 1) {
 			// bitmap:
+			/*p = transform(p, region.bitmap_transform);
+			p = p/2.0f+0.5f.xxx;
+			p = p - floor(p);
+			p = clamp(region.size.xxx*p, 0.001f.xxx, region.size.xxx-0.001f.xxx);
+			float2 uv = region.index + float2(p.x, p.z + region.size*p.y);
+			
+			//p = float3(region.index,0) + float3(region.size,0)*p;*/
 			p = transform(p, region.bitmap_transform);
 			p = p/2.0f+0.5f.xxx;
 			p = p - floor(p);
-			p = float3(region.index,0) + float3(region.size,0)*p;
-			return float4(tex2Dlod(_BitmapAtlas, float4(p, 0)).xyz,1);// region.opacity);
+			p = clamp(p, 0.05f.xxx, 0.95f.xxx);
+			p = region.index + region.size*p;
+			//return float4(p,1);
+			return float4(tex3Dlod(_BitmapAtlas, float4(p, 0)).xyz,1);// region.opacity);
+			//return float4(1, 0, 0, 1);
 		}
 		else if (region.type == 2) {
 			// color

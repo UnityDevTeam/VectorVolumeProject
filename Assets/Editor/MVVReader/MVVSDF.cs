@@ -38,6 +38,7 @@ namespace Assets.Editor.MVVReader
             {
                 file = new MVVSDFFile(File.ReadAllBytes(path), false);
             }
+
             return file;
         }
 

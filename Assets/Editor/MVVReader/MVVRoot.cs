@@ -28,12 +28,12 @@ namespace Assets.Editor.MVVReader
 
     public struct SDF
     {
-        public int index_x;
-        public int index_y;
-        public int index_z;
-        public int size_x;
-        public int size_y;
-        public int size_z;
+        public float index_x;
+        public float index_y;
+        public float index_z;
+        public float size_x;
+        public float size_y;
+        public float size_z;
         public Matrix4x4 transform;
         public Matrix4x4 aabb; // only evaluate sdf in there...
         public int type;
@@ -41,7 +41,7 @@ namespace Assets.Editor.MVVReader
         int max_transform;
         // TODO seeded SDFs
 
-        public SDF(int[] index, int[] size, Matrix4x4 transform, Matrix4x4 aabb, int type, int first_transform, int max_transform)
+        public SDF(Vector3 index, Vector3 size, Matrix4x4 transform, Matrix4x4 aabb, int type, int first_transform, int max_transform)
         {
             this.index_x = index[0];
             this.index_y = index[1];
@@ -66,8 +66,10 @@ namespace Assets.Editor.MVVReader
         // public Vector3 scale;
         public float index_x;
         public float index_y;
+        public float index_z;
         public float size_x;
         public float size_y;
+        public float size_z;
         public Matrix4x4 bitmap_transform;
         // For now only support one index
         // if no index is used, define 1x1x1 index
@@ -78,7 +80,7 @@ namespace Assets.Editor.MVVReader
         public Matrix4x4 index_transform;
         public int index_offset;
 
-        public Region(int type, Color color, float opacity, int[] index_size, Matrix4x4 index_transform, int index_offset, int embedded, float[] index, float[] size, Matrix4x4 bitmap_transform)
+        public Region(int type, Color color, float opacity, int[] index_size, Matrix4x4 index_transform, int index_offset, int embedded, Vector3 index, Vector3 size, Matrix4x4 bitmap_transform)
         {
             this.type = type;
             this.color = new Vector3(color.r, color.g, color.b);
@@ -91,8 +93,10 @@ namespace Assets.Editor.MVVReader
             this.embedded = embedded;
             this.index_x = index[0];
             this.index_y = index[1];
+            this.index_z = index[2];
             this.size_x = size[0];
             this.size_y = size[1];
+            this.size_z = size[2];
             this.bitmap_transform = bitmap_transform;
 
         }
@@ -131,8 +135,8 @@ namespace Assets.Editor.MVVReader
 
         public Dictionary<string, MVVSDFFile> sdfTextures = 
             new Dictionary<string,MVVSDFFile>(); // Use same 3DTexture for mulitple SDFs if possible -> Speed
-        public Dictionary<string, Texture2D> regionTextures =
-            new Dictionary<string,Texture2D>();   // Use same Bitmap textures for mulitple regions if possible -> Speed
+        public Dictionary<string, MVVVolume> regionTextures =
+            new Dictionary<string, MVVVolume>();   // Use same Bitmap textures for mulitple regions if possible -> Speed
 
         public Texture3D globalTexture; // 3D texture atlas of all SDF Textures
 
@@ -143,7 +147,7 @@ namespace Assets.Editor.MVVReader
         private int currentIndexOffset = 0;
         private int currentTransformIndex = 0;
 
-        public Texture2D globalBitmapTexture;
+        public Texture3D globalBitmapTexture;
 
 
         public void passToShader(Material mat)
@@ -158,7 +162,7 @@ namespace Assets.Editor.MVVReader
             mat.SetTexture("_VolumeAtlas", globalTexture);
             //int max_dim = Math.Max(globalTexture.depth, Math.Max(globalTexture.width, globalTexture.height));
             //mat.SetVector("_VolumeAtlasSize", new Vector3(globalTexture.height, globalTexture.depth, globalTexture.width));
-            mat.SetVector("_VolumeAtlasSize", new Vector3(globalTexture.width, globalTexture.height, globalTexture.depth));
+            //mat.SetVector("_VolumeAtlasSize", new Vector3(globalTexture.width, globalTexture.height, globalTexture.depth));
             mat.SetInt("_rootInstance", rootObject.index);
 
             mat.SetTexture("_BitmapAtlas", globalBitmapTexture);
@@ -210,7 +214,7 @@ namespace Assets.Editor.MVVReader
                 }
                 sdf.file.aabb.createMatrix();
                 Debug.Log(start_transform + ", " + max_transform);
-                sdfs_for_shader[sdf.index] = new SDF(sdf.file.index, sdf.file.sizes, sdf.transform.matrix.inverse, sdf.file.aabb.matrix.inverse, (int)sdf.type, start_transform, max_transform);
+                sdfs_for_shader[sdf.index] = new SDF(sdf.file.volume.index, sdf.file.volume.size, sdf.transform.matrix.inverse, sdf.file.aabb.matrix.inverse, (int)sdf.type, start_transform, max_transform);
             }
 
             foreach (MVVRegion region in regions.Values)
@@ -248,10 +252,10 @@ namespace Assets.Editor.MVVReader
 
                 if (region.embedded_objects.Count > 0)
                 {
-                    regions_for_shader[region.index] = new Region((int)region.type, region.color, region.opacity, regionindex.index_size, regionindex.transform.matrix.inverse, currentIndexOffset, 1, region.imageIndex, region.imageSize, region.transform.matrix);
+                    regions_for_shader[region.index] = new Region((int)region.type, region.color, region.opacity, regionindex.index_size, regionindex.transform.matrix.inverse, currentIndexOffset, 1, region.volume.index, region.volume.size, region.transform.matrix.inverse);
                 } else
                 {
-                    regions_for_shader[region.index] = new Region((int)region.type, region.color, region.opacity, regionindex.index_size, regionindex.transform.matrix.inverse, currentIndexOffset, 0, region.imageIndex, region.imageSize, region.transform.matrix);
+                    regions_for_shader[region.index] = new Region((int)region.type, region.color, region.opacity, regionindex.index_size, regionindex.transform.matrix.inverse, currentIndexOffset, 0, region.volume.index, region.volume.size, region.transform.matrix.inverse);
                 }
 
 
@@ -289,8 +293,8 @@ namespace Assets.Editor.MVVReader
             }
 
 
-            Debug.Log("Index:" + sdfs["SECTION"].file.index[0] + "," + sdfs["SECTION"].file.index[1] + "," + sdfs["SECTION"].file.index[2]);
-            Debug.Log("Size:" + sdfs["SECTION"].file.sizes[0] + "," + sdfs["SECTION"].file.sizes[1] + "," + sdfs["SECTION"].file.sizes[2]);
+            //Debug.Log("Index:" + sdfs["SECTION"].file.index[0] + "," + sdfs["SECTION"].file.index[1] + "," + sdfs["SECTION"].file.index[2]);
+            //Debug.Log("Size:" + sdfs["SECTION"].file.sizes[0] + "," + sdfs["SECTION"].file.sizes[1] + "," + sdfs["SECTION"].file.sizes[2]);
 
             // Fill buffers
             GPUBuffer.Instance.NodeBuffer.SetData(nodes_for_shader);
@@ -424,7 +428,7 @@ namespace Assets.Editor.MVVReader
 
         private void populateBitmapTexture()
         {
-            Dictionary<string, int> nameList = new Dictionary<string,int>();
+            /*Dictionary<string, int> nameList = new Dictionary<string,int>();
             Texture2D[] textureList = new Texture2D[regionTextures.Count];
 
             var i = 0;
@@ -445,31 +449,51 @@ namespace Assets.Editor.MVVReader
                     i = nameList[region.Value.image_file];
                     region.Value.imageIndex[0] = erg[i].min[0];
                     region.Value.imageIndex[1] = erg[i].min[1];
-                    region.Value.imageSize[0] = erg[i].width;
-                    region.Value.imageSize[1] = erg[i].height;
+                    region.Value.imageSize = erg[i].width;
                 }
             }
-            
 
+            for (i = 0; i < erg.Length; i++)
+            {
+                Debug.Log(erg[i].ToString());
+            }*/
+
+            //TODO: make MVVVolume.cs and use it to store volumes for generalization
+            //      make Texture3D populateTexture(MVVVolume[] volumes) for texture packing
+            MVVVolume[] volumes = new MVVVolume[regionTextures.Count];
+            regionTextures.Values.CopyTo(volumes, 0);
+            globalBitmapTexture = packTexture3D(volumes, new Color(1, 0, 0, 1), "bitmap", TextureFormat.RGBA32);
         }
 
         private void polulateTexture()
         {
-            // go through all Textures and pack them to globalTexture
-            // Using some kind of first fit (Reference: A genetic algorithm for packing in three dimensions, Corcoran, Wainwright)
-            
-            //Sort by volume && biggest dimension
-            List<MVVSDFFile> sortedSDF = new List<MVVSDFFile>();
-            int[] biggest = { 0, 0, 0 };
+            MVVVolume[] volumes = new MVVVolume[sdfTextures.Count];
+            int i = 0;
             foreach (KeyValuePair<string, MVVSDFFile> sdf in sdfTextures)
             {
-                sortedSDF.Add(sdf.Value);
-                if (sdf.Value.sizes[0] > biggest[0]) biggest[0] = sdf.Value.sizes[0];
-                if (sdf.Value.sizes[1] > biggest[1]) biggest[1] = sdf.Value.sizes[1];
-                if (sdf.Value.sizes[2] > biggest[2]) biggest[2] = sdf.Value.sizes[2];
+                volumes[i] = sdf.Value.volume;
+                i++;
             }
-            sortedSDF.Sort();
-            sortedSDF.Reverse();
+            globalTexture = packTexture3D(volumes, new Color(0, 0, 0, 1), "volumes", TextureFormat.Alpha8);
+        }
+
+        private Texture3D packTexture3D(MVVVolume[] volumes, Color defaultColor, string assetName, TextureFormat format)
+        {
+            // Using some kind of first fit (Reference: A genetic algorithm for packing in three dimensions, Corcoran, Wainwright)
+            
+            // Sort by volume && biggest dimension
+            List<MVVVolume> sortedVolumes = new List<MVVVolume>(volumes);
+
+            int[] biggest = { 0, 0, 0 };
+            foreach (MVVVolume volume in sortedVolumes)
+            {
+                volume.size = new Vector3(volume.dimension[0], volume.dimension[1], volume.dimension[2]);
+                if (volume.dimension[0] > biggest[0]) biggest[0] = volume.dimension[0];
+                if (volume.dimension[1] > biggest[1]) biggest[1] = volume.dimension[1];
+                if (volume.dimension[2] > biggest[2]) biggest[2] = volume.dimension[2];
+            }
+            sortedVolumes.Sort();
+            sortedVolumes.Reverse();
 
             int smallestOfBiggest;
 
@@ -487,21 +511,22 @@ namespace Assets.Editor.MVVReader
             var indexpos = new int[] { 0, 0, 0 };
 
 
-            for (int i = 0; i < sortedSDF.Count; i++)
+            for (int i = 0; i < sortedVolumes.Count; i++)
             {
-                sortedSDF[i].index[0] = indexpos[0];
-                sortedSDF[i].index[1] = indexpos[1];
-                sortedSDF[i].index[2] = indexpos[2];
+                sortedVolumes[i].index[0] = indexpos[0];
+                sortedVolumes[i].index[1] = indexpos[1];
+                sortedVolumes[i].index[2] = indexpos[2];
 
-                indexpos[smallestOfBiggest] += sortedSDF[i].sizes[smallestOfBiggest];
+                indexpos[smallestOfBiggest] += sortedVolumes[i].dimension[smallestOfBiggest];
 
             }
 
-            var dimension = biggest;
+            int[] dimension = biggest;
             dimension[smallestOfBiggest] = indexpos[smallestOfBiggest];
 
             for (int i = 0; i<dimension.Length; i++)
             {
+                //Convert to next greater power of 2 (unity wants that...)
                 dimension[i] = (int)Math.Pow(2, Math.Ceiling(Math.Log(dimension[i], 2)));
             }
 
@@ -518,7 +543,7 @@ namespace Assets.Editor.MVVReader
             {
                 if (smallestOfBiggest == 0)
                 {
-                    if (currentSDF < sortedSDF.Count && x > sortedSDF[currentSDF].index[0] + sortedSDF[currentSDF].sizes[0])
+                    if (currentSDF < sortedVolumes.Count && x >= sortedVolumes[currentSDF].index[0] + sortedVolumes[currentSDF].dimension[0])
                     {
                         currentSDF++;
                     }
@@ -531,7 +556,7 @@ namespace Assets.Editor.MVVReader
                 {
                     if (smallestOfBiggest == 1)
                     {
-                        if (currentSDF < sortedSDF.Count && y > sortedSDF[currentSDF].index[1] + sortedSDF[currentSDF].sizes[1])
+                        if (currentSDF < sortedVolumes.Count && y >= sortedVolumes[currentSDF].index[1] + sortedVolumes[currentSDF].dimension[1])
                         {
                             currentSDF++;
                         }
@@ -546,59 +571,75 @@ namespace Assets.Editor.MVVReader
                         if (smallestOfBiggest == 2)
                         {
                             //Check if we are in correct sdf...
-                            if (currentSDF < sortedSDF.Count && z > sortedSDF[currentSDF].index[2] + sortedSDF[currentSDF].sizes[2])
+                            if (currentSDF < sortedVolumes.Count && z >= sortedVolumes[currentSDF].index[2] + sortedVolumes[currentSDF].dimension[2])
                             {
                                 currentSDF++; // go to the next one...
                             }
                         }
 
-                        if (currentSDF > sortedSDF.Count - 1)
+                        if (currentSDF > sortedVolumes.Count - 1)
                         {
                             // Okay, no more sdfs...
-                            colors[linearIndex].a = 1f;
+                            colors[linearIndex] = defaultColor;
                             //linearIndex++;
                             continue;
 
                         }
 
-                        if (z < sortedSDF[currentSDF].index[2] + sortedSDF[currentSDF].sizes[2] &&
-                            y < sortedSDF[currentSDF].index[1] + sortedSDF[currentSDF].sizes[1] &&
-                            x < sortedSDF[currentSDF].index[0] + sortedSDF[currentSDF].sizes[0] )
+                        if (z < sortedVolumes[currentSDF].index[2] + sortedVolumes[currentSDF].dimension[2] &&
+                            y < sortedVolumes[currentSDF].index[1] + sortedVolumes[currentSDF].dimension[1] &&
+                            x < sortedVolumes[currentSDF].index[0] + sortedVolumes[currentSDF].dimension[0])
                         {
                             // We are in current sdf
                             // Calculate local index;
-                            localLinearIndex = (x - sortedSDF[currentSDF].index[0]) +
-                                               (y - sortedSDF[currentSDF].index[1]) * sortedSDF[currentSDF].sizes[0] +
-                                               (z - sortedSDF[currentSDF].index[2]) * sortedSDF[currentSDF].sizes[1] * sortedSDF[currentSDF].sizes[0];
+                            localLinearIndex = (x - (int)sortedVolumes[currentSDF].index[0]) +
+                                               (y - (int)sortedVolumes[currentSDF].index[1]) * sortedVolumes[currentSDF].dimension[0] +
+                                               (z - (int)sortedVolumes[currentSDF].index[2]) * sortedVolumes[currentSDF].dimension[1] * sortedVolumes[currentSDF].dimension[0];
                             try
                             {
-                                colors[linearIndex] = sortedSDF[currentSDF].volumeColors[localLinearIndex];
+                                colors[linearIndex] = sortedVolumes[currentSDF].colors[localLinearIndex];
                             }
                             catch (IndexOutOfRangeException)
                             {
                                 Debug.Log("ID: " + currentSDF);
                                 Debug.Log("(x,y,z) = " + x + "," + y + "," + z);
-                                Debug.Log("index = " + sortedSDF[currentSDF].index[0] + "," + sortedSDF[currentSDF].index[1] + "," + sortedSDF[currentSDF].index[2]);
-                                Debug.Log("Sizes = " + sortedSDF[currentSDF].sizes[0] + "," + sortedSDF[currentSDF].sizes[1] + "," + sortedSDF[currentSDF].sizes[2]);
-                                return;
+                                Debug.Log("index = " + sortedVolumes[currentSDF].index[0] + "," + sortedVolumes[currentSDF].index[1] + "," + sortedVolumes[currentSDF].index[2]);
+                                Debug.Log("Sizes = " + sortedVolumes[currentSDF].dimension[0] + "," + sortedVolumes[currentSDF].dimension[1] + "," + sortedVolumes[currentSDF].dimension[2]);
+                                return null;
                             }
                             
                         } else
                         {
-                            colors[linearIndex].a = 1f;
+                            colors[linearIndex] = defaultColor;
                         }
                     }
                 }
             }
 
-            globalTexture = new Texture3D(dimension[0], dimension[1], dimension[2], TextureFormat.Alpha8, true);
-            globalTexture.SetPixels(colors);
-            globalTexture.filterMode = FilterMode.Trilinear;
-            globalTexture.anisoLevel = 0;
-            globalTexture.Apply();
+            Texture3D result = new Texture3D(dimension[0], dimension[1], dimension[2], format, true);
+            result.SetPixels(colors);
+            result.filterMode = FilterMode.Trilinear;
+            result.anisoLevel = 0;
+            result.Apply();
+
+            // Normalize indices and sizes in Volumes
+            foreach (MVVVolume volume in sortedVolumes)
+            {
+                Vector3 dim = new Vector3(1.0f / (float)dimension[0], 1.0f / (float)dimension[1], 1.0f / (float)dimension[2]);
+                volume.size.Scale(dim);
+                volume.index.Scale(dim);
+                Debug.Log(volume.size.ToString() + ", " + volume.index.ToString());
+            }
+
+            /*string afsaf = "";
+            for (int i = 0; i < 1000; i++)
+            {
+                afsaf += colors[i].ToString();
+            }
+            Debug.Log(afsaf);*/
 
             //Temp add to assets...
-            string assetPath = "Assets/mvv_test.asset";
+            string assetPath = "Assets/" + assetName + ".asset";
 
             Texture3D tmp = (Texture3D)AssetDatabase.LoadAssetAtPath(assetPath, typeof(Texture3D));
             if (tmp)
@@ -607,8 +648,10 @@ namespace Assets.Editor.MVVReader
                 tmp = null;
             }
 
-            AssetDatabase.CreateAsset(globalTexture, assetPath);
+            AssetDatabase.CreateAsset(result, assetPath);
             AssetDatabase.SaveAssets();
+
+            return result;
 
         }
 
@@ -707,14 +750,14 @@ namespace Assets.Editor.MVVReader
                 }
                 if (regionTextures.ContainsKey(rootPath))
                 {
-                    region.image = regionTextures[rootPath];
+                    region.volume = regionTextures[rootPath];
                 }
                 else
                 {
                     region.loadImage(rootPath);
-                    regionTextures.Add(rootPath, region.image);
+                    regionTextures.Add(rootPath, region.volume);
                 }
-                region.image_file = rootPath;
+                //region.image_file = rootPath;
             }
             // Loading texture END
 

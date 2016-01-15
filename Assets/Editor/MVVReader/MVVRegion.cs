@@ -18,14 +18,15 @@ namespace Assets.Editor.MVVReader
         public int index;
         public string identifier;   // Unique Name
         public MVVRegionType type;  // Type of Region
-        public string image_file;
-        public Texture2D image;     // For type Bitmap
-        public float[] imageIndex = new float[2];
-        public float[] imageSize = new float[2];
+        //public string image_file;
+        //public Texture2D image;     // For type Bitmap
+        //public float[] imageIndex = new float[3];
+        //public float[] imageSize = new float[3];
         public Color color;         // For type Color
         public float opacity = 1.0f;// Overrides color
         public MVVTransform transform; // For Bitmap transform
         public List<MVVIndex> embedded_objects = new List<MVVIndex>(); // Embedded Objects
+        public MVVVolume volume = new MVVVolume();
 
         /// <summary>
         /// Load image from path
@@ -33,8 +34,10 @@ namespace Assets.Editor.MVVReader
         /// <param name="path"></param>
         internal void loadImage(string path)
         {
-            image = new Texture2D(1, 1); // image size will change on loadimage
+            Texture2D image = new Texture2D(1, 1); // image size will change on loadimage
             image.LoadImage(File.ReadAllBytes(path));
+            volume.dimension = new int[] { image.width, image.width, image.width };
+            volume.colors = image.GetPixels();
         }
 
     }
