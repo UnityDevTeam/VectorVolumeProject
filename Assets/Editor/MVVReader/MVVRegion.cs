@@ -36,8 +36,41 @@ namespace Assets.Editor.MVVReader
         {
             Texture2D image = new Texture2D(1, 1); // image size will change on loadimage
             image.LoadImage(File.ReadAllBytes(path));
-            volume.dimension = new int[] { image.width, image.width, image.width };
-            volume.colors = image.GetPixels();
+            volume.dimension = new int[] { image.width + 2, image.width + 2, image.width + 2};
+            Color[] colors = image.GetPixels();
+
+            // Put a 1px wrap border around the image, that
+            volume.colors = new Color[(image.width + 2) * (image.width + 2) * (image.width + 2)];
+            Debug.Log(volume.colors.Length);
+            int linearIndex = 0;
+            int localIndex = 0;
+            int xterm = 0;
+            int yterm = 0;
+            int zterm = 0;
+            for (int x = 0; x < image.width + 2; x++)
+            {
+                for (int y = 0; y < image.width + 2; y++)
+                {
+                    for (int z = 0; z < image.width + 2; z++)
+                    {
+                        linearIndex = x + y * (image.width + 2) + z * (image.width + 2) * (image.width + 2);
+                        if (x == 0) xterm = image.width - 1;
+                        else if (x == image.width + 1) xterm = 0;
+                        else xterm = x - 1;
+                        if (y == 0) yterm = image.width - 1;
+                        else if (y == image.width + 1) yterm = 0;
+                        else yterm = y - 1;
+                        if (z == 0) zterm = image.width - 1;
+                        else if (z == image.width + 1) zterm = 0;
+                        else zterm = z - 1;
+                        localIndex = xterm + yterm * (image.width) + zterm * (image.width) * (image.width);
+
+
+                        Color tmp = colors[localIndex];
+                        volume.colors[linearIndex] = tmp;
+                    }
+                }
+            }
         }
 
     }

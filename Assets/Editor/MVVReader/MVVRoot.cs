@@ -463,6 +463,11 @@ namespace Assets.Editor.MVVReader
             MVVVolume[] volumes = new MVVVolume[regionTextures.Count];
             regionTextures.Values.CopyTo(volumes, 0);
             globalBitmapTexture = packTexture3D(volumes, new Color(1, 0, 0, 1), "bitmap", TextureFormat.RGBA32);
+            foreach (KeyValuePair<string, MVVVolume> volume in regionTextures)
+            {
+                volume.Value.index = volume.Value.index + new Vector3(1.0f / globalBitmapTexture.width, 1.0f / globalBitmapTexture.height, 1.0f / globalBitmapTexture.depth);
+                volume.Value.size = volume.Value.size - new Vector3(2.0f / globalBitmapTexture.width, 2.0f / globalBitmapTexture.height, 2.0f / globalBitmapTexture.depth);
+            }
         }
 
         private void polulateTexture()

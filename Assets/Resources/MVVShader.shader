@@ -257,7 +257,7 @@
 			p = transform(p, region.bitmap_transform);
 			p = p/2.0f+0.5f.xxx;
 			p = p - floor(p);
-			p = clamp(p, 0.05f.xxx, 0.95f.xxx);
+			//p = clamp(p, 0.01f.xxx, 0.99f.xxx);
 			p = region.index + region.size*p;
 			//return float4(p,1);
 			return float4(tex3Dlod(_BitmapAtlas, float4(p, 0)).xyz,1);// region.opacity);
