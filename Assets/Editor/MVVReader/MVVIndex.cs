@@ -38,7 +38,7 @@ namespace Assets.Editor.MVVReader
         /// <param name="rotatefile">rotate file</param>
         /// <param name="scalefile">scale file</param>
         /// <param name="globalTransform">Transfrom that is done for each seed additionally</param>
-        public void addObjectsFromSeed(MVVObject mvv_object, string seedfile, string rotatefile, string scalefile, MVVTransform globalTransform)
+        public void addObjectsFromSeed(MVVIndexedObject mvv_object, string seedfile, string rotatefile, string scalefile, MVVTransform globalTransform)
         {
             globalTransform.createMatrix();
             Debug.Log("Global:" + globalTransform.matrix.ToString());

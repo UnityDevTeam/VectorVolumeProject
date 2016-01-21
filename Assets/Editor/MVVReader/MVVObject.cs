@@ -5,7 +5,7 @@ using System.Xml;
 
 namespace Assets.Editor.MVVReader
 {
-    public class MVVObject : Object
+    public class MVVObject : MVVIndexedObject
     {
         public int index;
         public string identifier;

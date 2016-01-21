@@ -37,11 +37,15 @@ namespace Assets.Editor.MVVReader
         public Matrix4x4 transform;
         public Matrix4x4 aabb; // only evaluate sdf in there...
         public int type;
-        int first_transform;
-        int max_transform;
+        public int index_size_x;
+        public int index_size_y;
+        public int index_size_z;
+        public Matrix4x4 index_transform;
+        public int index_offset;
+
         // TODO seeded SDFs
 
-        public SDF(Vector3 index, Vector3 size, Matrix4x4 transform, Matrix4x4 aabb, int type, int first_transform, int max_transform)
+        public SDF(Vector3 index, Vector3 size, Matrix4x4 transform, Matrix4x4 aabb, int type, int[] index_size, Matrix4x4 index_transform, int index_offset)
         {
             this.index_x = index[0];
             this.index_y = index[1];
@@ -52,8 +56,11 @@ namespace Assets.Editor.MVVReader
             this.transform = transform;
             this.aabb = aabb;
             this.type = type;
-            this.first_transform = first_transform;
-            this.max_transform = max_transform;
+            this.index_size_x = index_size[0];
+            this.index_size_y = index_size[1];
+            this.index_size_z = index_size[2];
+            this.index_transform = index_transform;
+            this.index_offset = index_offset;
         }
     }
 
@@ -199,22 +206,58 @@ namespace Assets.Editor.MVVReader
                 Debug.Log("SDF " + sdf.identifier + "(" + sdf.index + "): " + sdf.file.sizes[0]+"," + sdf.file.sizes[1]+"," + sdf.file.sizes[2]);
                 
                 sdf.transform.createMatrix();
-                int start_transform = currentTransformIndex;
-                int max_transform = 0;
-                if (sdf.seedTransforms != null && sdf.seedTransforms.Length > 0)
-                {
-                    max_transform = sdf.seedTransforms.Length;
-                    for (; currentTransformIndex < start_transform + max_transform; currentTransformIndex++)
-                    {
-                        sdf.seedTransforms[currentTransformIndex - start_transform].createMatrix();
-                        transforms_for_shader[currentTransformIndex] = sdf.seedTransforms[currentTransformIndex - start_transform].matrix.inverse;
-                        //if (currentTransformIndex < 10) Debug.Log(transforms_for_shader[currentTransformIndex] + ", " + sdf.seedTransforms[currentTransformIndex - start_transform].matrix);
-                            //Debug.Log(sdf.identifier + ": " + sdf.seedTransforms[currentTransformIndex - start_transform].scale.ToString() + ", " + sdf.seedTransforms[currentTransformIndex - start_transform].rotation.ToString() + ", " + sdf.seedTransforms[currentTransformIndex - start_transform].position.ToString());
-                    }
-                }
+
+
+                
                 sdf.file.aabb.createMatrix();
-                Debug.Log(start_transform + ", " + max_transform);
-                sdfs_for_shader[sdf.index] = new SDF(sdf.file.volume.index, sdf.file.volume.size, sdf.transform.matrix.inverse, sdf.file.aabb.matrix.inverse, (int)sdf.type, start_transform, max_transform);
+
+                // First we add our sdfs to the shader buffer objects
+                if (sdf.type == MVVSDFType.SEEDING)
+                {
+                    sdf.seedIndex.transform.createMatrix();
+                    sdfs_for_shader[sdf.index] = new SDF(sdf.file.volume.index, sdf.file.volume.size, sdf.transform.matrix.inverse, sdf.file.aabb.matrix.inverse, (int)sdf.type, sdf.seedIndex.index_size, sdf.seedIndex.transform.matrix.inverse, currentIndexOffset);
+                }
+                else
+                {
+                    sdfs_for_shader[sdf.index] = new SDF(sdf.file.volume.index, sdf.file.volume.size, sdf.transform.matrix.inverse, sdf.file.aabb.matrix.inverse, (int)sdf.type, new int[] { 1, 1, 1 }, Matrix4x4.identity, 0);
+                }
+                
+
+                // Then we go through every cell, if seeding is enabled...
+                if (sdf.type == MVVSDFType.SEEDING)
+                {
+                    for (int x = 0; x < sdf.seedIndex.embedded_indexed_objects.GetLength(0); x++)
+                    {
+                        for (int y = 0; y < sdf.seedIndex.embedded_indexed_objects.GetLength(1); y++)
+                        {
+                            for (int z = 0; z < sdf.seedIndex.embedded_indexed_objects.GetLength(2); z++)
+                            {
+                                // calculate linear index
+                                int linear_index = x * sdf.seedIndex.index_size[1] * sdf.seedIndex.index_size[2] +
+                                                   y * sdf.seedIndex.index_size[2] +
+                                                   z;
+                                if (sdf.seedIndex.embedded_indexed_objects[x, y, z].Count > 0)
+                                {
+                                    // Add all instances
+                                    indexcells_for_shader[linear_index + currentIndexOffset] = new Indexcell(currentObjectIndex, sdf.seedIndex.embedded_indexed_objects[x, y, z].Count);
+
+                                    foreach (MVVEmbedded emb in sdf.seedIndex.embedded_indexed_objects[x, y, z])
+                                    {
+                                        emb.transform.createMatrix();
+                                        instances_for_shader[currentObjectIndex] = new Instance(emb.transform.matrix.inverse, ((MVVSDF)emb.mvv_object).index);
+
+                                        currentObjectIndex++;
+                                    }
+                                }
+                                else
+                                {
+                                    indexcells_for_shader[linear_index + currentIndexOffset] = new Indexcell(-1, -1);
+                                }
+                            }
+                        }
+                    }
+                    currentIndexOffset += sdf.seedIndex.embedded_indexed_objects.GetLength(0) * sdf.seedIndex.embedded_indexed_objects.GetLength(1) * sdf.seedIndex.embedded_indexed_objects.GetLength(2);
+                }
             }
 
             foreach (MVVRegion region in regions.Values)
@@ -278,7 +321,7 @@ namespace Assets.Editor.MVVReader
                                 foreach (MVVEmbedded emb in regionindex.embedded_indexed_objects[x, y, z])
                                 {
                                     emb.transform.createMatrix();
-                                    instances_for_shader[currentObjectIndex] = new Instance(emb.transform.matrix.inverse, emb.mvv_object.tree.root.index);
+                                    instances_for_shader[currentObjectIndex] = new Instance(emb.transform.matrix.inverse, ((MVVObject)emb.mvv_object).tree.root.index);
                                     
                                     currentObjectIndex++;
                                 }
@@ -302,7 +345,7 @@ namespace Assets.Editor.MVVReader
             GPUBuffer.Instance.RegionBuffer.SetData(regions_for_shader);
             GPUBuffer.Instance.IndexcellBuffer.SetData(indexcells_for_shader);
             GPUBuffer.Instance.InstanceBuffer.SetData(instances_for_shader);
-            GPUBuffer.Instance.TransformBuffer.SetData(transforms_for_shader);
+            //GPUBuffer.Instance.TransformBuffer.SetData(transforms_for_shader);
 
             Debug.Log("...uploading");
             // Load buffers to shader
@@ -311,7 +354,7 @@ namespace Assets.Editor.MVVReader
             mat.SetBuffer("regionBuffer", GPUBuffer.Instance.RegionBuffer);
             mat.SetBuffer("indexcellBuffer", GPUBuffer.Instance.IndexcellBuffer);
             mat.SetBuffer("instanceBuffer", GPUBuffer.Instance.InstanceBuffer);
-            mat.SetBuffer("transformBuffer", GPUBuffer.Instance.TransformBuffer);
+            //mat.SetBuffer("transformBuffer", GPUBuffer.Instance.TransformBuffer);
 
             Debug.Log("...done!");
 
@@ -348,6 +391,10 @@ namespace Assets.Editor.MVVReader
             lookup.filterMode = FilterMode.Trilinear;
 
             mat.SetTexture("_cubicLookup", lookup);
+
+            //Debug.Log(instances_for_shader[rootObject.index].transform.ToString());
+            //Debug.Log(sdfs_for_shader[nodes_for_shader[instances_for_shader[rootObject.index].rootnode].sdfId].transform.inverse.ToString());
+            //Debug.Log(sdfs_for_shader[nodes_for_shader[instances_for_shader[rootObject.index].rootnode].sdfId].aabb.inverse.ToString());
 
 
         }
@@ -907,51 +954,6 @@ namespace Assets.Editor.MVVReader
             sdf.transform = getMVVTransform(childNode);
             // Loading Transformations END
 
-            // Loading Seed Stuff BEGIN
-            if (childNode.Attributes["seedFile"] != null)
-            {
-                var pathSeed = childNode.Attributes["seedFile"].InnerText;
-                rootPath = "";
-                if (Path.IsPathRooted(pathSeed))
-                {
-                    rootPath = pathSeed;
-                }
-                else
-                {
-                    rootPath = baseDir + "\\" + pathSeed;
-                }
-                sdf.loadSeedFile(rootPath);
-                if (childNode.Attributes["rotateFile"] != null)
-                {
-                    pathSeed = childNode.Attributes["rotateFile"].InnerText;
-                    rootPath = "";
-                    if (Path.IsPathRooted(pathSeed))
-                    {
-                        rootPath = pathSeed;
-                    }
-                    else
-                    {
-                        rootPath = baseDir + "\\" + pathSeed;
-                    }
-                    sdf.loadSeedRotationFile(rootPath);
-                }
-                if (childNode.Attributes["scaleFile"] != null)
-                {
-                    pathSeed = childNode.Attributes["scaleFile"].InnerText;
-                    rootPath = "";
-                    if (Path.IsPathRooted(pathSeed))
-                    {
-                        rootPath = pathSeed;
-                    }
-                    else
-                    {
-                        rootPath = baseDir + "\\" + pathSeed;
-                    }
-                    sdf.loadSeedScaleFile(rootPath);
-                }
-            }
-            // Loading Seed Stuff END
-
 
             sdf.type = MVVSDFType.DEFAULT;
             if (childNode.Attributes["type"] != null)
@@ -967,6 +969,78 @@ namespace Assets.Editor.MVVReader
                     default:
                         break;
                 }
+            }
+
+            if (sdf.type == MVVSDFType.SEEDING)
+            {
+                //We are seeding this sdf...
+                //First check for an index specification
+                
+                var index = new MVVIndex();
+                if (childNode.Attributes["index"] != null)
+                {
+                    var size = childNode.Attributes["index"].InnerText.Split(new char[] { ' ' });
+                    index.index_size[0] = int.Parse(size[0]);
+                    index.index_size[1] = int.Parse(size[1]);
+                    index.index_size[2] = int.Parse(size[2]);
+                }
+                else
+                {
+                    index.index_size[0] = 1;
+                    index.index_size[1] = 1;
+                    index.index_size[2] = 1;
+                }
+                index.use_index = true;
+
+                // Maybe add some index transform later?!?
+                index.transform = new MVVTransform(); //Simple identity for now
+
+                string seedPath = null;
+                string rotationPath = null;
+                string scalePath = null;
+
+
+                if (childNode.Attributes["seedFile"] == null)
+                {
+                    throw new IllegalMVVFileException("SDF (" + nameSDF + ") must have a seed file, when seeding is enabled");
+                }
+                var pathSeed = childNode.Attributes["seedFile"].InnerText;
+                if (Path.IsPathRooted(pathSeed))
+                {
+                    seedPath = pathSeed;
+                }
+                else
+                {
+                    seedPath = baseDir + "\\" + pathSeed;
+                }
+                if (childNode.Attributes["rotateFile"] != null)
+                {
+                    pathSeed = childNode.Attributes["rotateFile"].InnerText;
+                    if (Path.IsPathRooted(pathSeed))
+                    {
+                        rotationPath = pathSeed;
+                    }
+                    else
+                    {
+                        rotationPath = baseDir + "\\" + pathSeed;
+                    }
+                }
+                if (childNode.Attributes["scaleFile"] != null)
+                {
+                    pathSeed = childNode.Attributes["scaleFile"].InnerText;
+                    if (Path.IsPathRooted(pathSeed))
+                    {
+                        scalePath = pathSeed;
+                    }
+                    else
+                    {
+                        scalePath = baseDir + "\\" + pathSeed;
+                    }
+                }
+                index.addObjectsFromSeed(sdf, seedPath, rotationPath, scalePath, sdf.transform);
+                sdf.seedIndex = index;
+
+                index.buildIndex();
             }
 
             if (childNode.Attributes["offset"] != null)

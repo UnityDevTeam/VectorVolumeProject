@@ -158,8 +158,8 @@ namespace Assets.Editor.MVVReader
             aabb = new MVVTransform();
             aabb.position = new Vector3(bboxMin[0] + diffX, bboxMin[1] + diffY, bboxMin[2] + diffZ);
             aabb.scale = new Vector3(diffX, diffY, diffZ);
-            //Debug.Log("Box: " + "(" + bboxMax[0] + ", " + bboxMax[1] + ", " + bboxMax[2] + ") - (" + bboxMin[0] + ", " + bboxMin[1] + ", " + bboxMin[2] + ")");
-            //Debug.Log("Box: " + "(" + aabb.position[0] + ", " + aabb.position[1] + ", " + aabb.position[2] + ") - (" + aabb.scale[0] + ", " + aabb.scale[1] + ", " + aabb.scale[2] + ")");
+            Debug.Log("Box: " + "(" + bboxMax[0] + ", " + bboxMax[1] + ", " + bboxMax[2] + ") - (" + bboxMin[0] + ", " + bboxMin[1] + ", " + bboxMin[2] + ")");
+            Debug.Log("Box: " + "(" + aabb.position[0] + ", " + aabb.position[1] + ", " + aabb.position[2] + ") - (" + aabb.scale[0] + ", " + aabb.scale[1] + ", " + aabb.scale[2] + ")");
             volume = this.getVolume();
         }
 

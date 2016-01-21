@@ -11,7 +11,7 @@ public class GPUBuffer : MonoBehaviour
     public static int NumRegions = 32;
     public static int NumInstances = 262144;
     public static int NumIndices = 262144;
-    public static int NumTransforms = 262144;
+    //public static int NumTransforms = 262144;
 
     //MVV Buffers //
 
@@ -20,7 +20,7 @@ public class GPUBuffer : MonoBehaviour
     public ComputeBuffer RegionBuffer;
     public ComputeBuffer InstanceBuffer;
     public ComputeBuffer IndexcellBuffer;
-    public ComputeBuffer TransformBuffer;
+    //public ComputeBuffer TransformBuffer;
 
     //*****//
 
@@ -64,7 +64,7 @@ public class GPUBuffer : MonoBehaviour
         if (RegionBuffer == null) RegionBuffer = new ComputeBuffer(NumRegions, System.Runtime.InteropServices.Marshal.SizeOf(typeof(Region)));
         if (InstanceBuffer == null) InstanceBuffer = new ComputeBuffer(NumInstances, System.Runtime.InteropServices.Marshal.SizeOf(typeof(Instance)));
         if (IndexcellBuffer == null) IndexcellBuffer = new ComputeBuffer(NumIndices, System.Runtime.InteropServices.Marshal.SizeOf(typeof(Indexcell)));
-        if (TransformBuffer == null) TransformBuffer = new ComputeBuffer(NumTransforms, System.Runtime.InteropServices.Marshal.SizeOf(typeof(Matrix4x4)));
+        //if (TransformBuffer == null) TransformBuffer = new ComputeBuffer(NumTransforms, System.Runtime.InteropServices.Marshal.SizeOf(typeof(Matrix4x4)));
 
     }
 
@@ -76,6 +76,6 @@ public class GPUBuffer : MonoBehaviour
         if (RegionBuffer != null) { RegionBuffer.Release(); RegionBuffer = null; }
         if (InstanceBuffer != null) { InstanceBuffer.Release(); InstanceBuffer = null; }
         if (IndexcellBuffer != null) { IndexcellBuffer.Release(); IndexcellBuffer = null; }
-        if (TransformBuffer != null) { TransformBuffer.Release(); TransformBuffer = null; }
+        //if (TransformBuffer != null) { TransformBuffer.Release(); TransformBuffer = null; }
     }
 }

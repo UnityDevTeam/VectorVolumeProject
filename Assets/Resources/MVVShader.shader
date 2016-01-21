@@ -26,8 +26,9 @@
 		float4x4 transform;
 		float4x4 aabb;
 		int type;
-		int first_transform;
-		int max_transform;
+		int3 index_size;
+		float4x4 index_transform;
+		int index_offset;
 	};
 
 	struct Region
@@ -71,7 +72,6 @@
 	uniform StructuredBuffer<Region> regionBuffer;
 	uniform StructuredBuffer<Instance> instanceBuffer;
 	uniform StructuredBuffer<Indexcell> indexcellBuffer;
-	uniform StructuredBuffer<float4x4> transformBuffer;
 
 	uniform sampler2D _cubicLookup; // Lookup for fast cubic interpolation
 
@@ -183,7 +183,6 @@
 		// point is between -1..1 in every direction
 		// put between 0..1
 		p = p/2.0f+0.5f.xxx;
-		
 		//float3 new_p = index / float3(_VolumeAtlasSize)+(size / float3(_VolumeAtlasSize))*p;
 		float3 new_p = index + size*p;
 		return sample_volume_cubic(new_p);
@@ -204,7 +203,7 @@
 		}
 		//seed
 		if (sdf.type == 1) {
-			float mini = 1.0f;
+			/*float mini = 1.0f;
 			for (int i = sdf.first_transform; i < sdf.first_transform + sdf.max_transform; i++)
 			{
 				float3 newP = transform(p, transformBuffer[i]);
@@ -218,7 +217,48 @@
 					mini = min(sample_volume(newP, sdf.index, sdf.size), mini);
 				}
 			}
-			return mini;
+			return mini;*/
+			//Indexing
+			//First check where we are in index
+			float3 indexP = transform(p, sdf.index_transform);
+
+			if (!isCoordValid(indexP)) {
+				// No embedded will be in index, just return 1
+				return 1;
+			}
+			
+			// indexP is now in (-1,-1,-1)x(1,1,1) of index, time to check correct ccordinate
+			// get in range 0..0.999
+			indexP = indexP/2 + 0.5 - 0.001;
+			int linear_index = (int)(sdf.index_size.x*indexP.x) * sdf.index_size.z * sdf.index_size.y +
+						   (int)(sdf.index_size.y*indexP.y) * sdf.index_size.z +
+						   (int)(sdf.index_size.z*indexP.z);
+
+
+			int current_embedded_index = indexcellBuffer[sdf.index_offset + linear_index].instance;
+
+			if (current_embedded_index < 0) {
+				//No embedds in this index cell, just return 1
+				return 1;
+			}
+			
+			int current_embedded_length = indexcellBuffer[sdf.index_offset + linear_index].max_instance;
+			
+			float minValue = 1.0f;
+			for (int i = current_embedded_index; i < current_embedded_index + current_embedded_length; i++){
+				float3 newP = transform(p, instanceBuffer[i].transform);
+				newP = transform(newP, sdf.aabb);
+				
+				// Check range
+				if (isCoordValid(newP))
+				{
+					//return 0;
+					//return sample_volume(newP, sdf.index, sdf.size);
+					minValue = min(sample_volume(newP, sdf.index, sdf.size), minValue);
+				}
+			}
+			return minValue;
+			
 		}
 		//Tiling
 		if (sdf.type == 2) {
