@@ -22,6 +22,8 @@ namespace Assets.Editor.MVVReader
         //public MVVTransform[] seedTransforms;  // Seed Transforms, only used if type=SEEDING
         public MVVIndex seedIndex;
         public float offset = 0f;              // offset iso-surface
+        public int functionID;
+        public string function;
 
 
         /// <summary>

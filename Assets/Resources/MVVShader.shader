@@ -29,6 +29,7 @@
 		int3 index_size;
 		float4x4 index_transform;
 		int index_offset;
+		int function;
 	};
 
 	struct Region
@@ -97,7 +98,17 @@
         return output;
     }
 
-
+	/**
+	 * Function for user input, will be filled with stuff when shader stitching
+	 */
+	float userFunction(float3 p, float t, int func){
+		
+		/*<<< FUNCTIONS >>>*/
+		return 1;
+		
+	}
+	
+	
 	// Transforms a point with given matrix (must be already inverse)
 	float3 transform(float3 p, float4x4 mat)
 	{
@@ -199,6 +210,7 @@
 			if (isCoordValid(p) == false) {
 				return 1;
 			}
+			if (sdf.function >= 0) return userFunction(p,0,sdf.function);
 			return sample_volume(p, sdf.index, sdf.size);
 		}
 		//seed
@@ -254,7 +266,8 @@
 				{
 					//return 0;
 					//return sample_volume(newP, sdf.index, sdf.size);
-					minValue = min(sample_volume(newP, sdf.index, sdf.size), minValue);
+					if (sdf.function >= 0) minValue = min(userFunction(p,0,sdf.function), minValue);
+					else minValue = min(sample_volume(newP, sdf.index, sdf.size), minValue);
 				}
 			}
 			return minValue;
@@ -273,6 +286,7 @@
 			if (isCoordValid(p) == false) {
 				return 1;
 			}
+			if (sdf.function >= 0) return userFunction(p,0,sdf.function);
 			return sample_volume(p, sdf.index, sdf.size);
 		}
 		return 1;

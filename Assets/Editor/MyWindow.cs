@@ -58,10 +58,12 @@ class CellUnityWindow : EditorWindow
                     "XML file",
                     "",
                     "xml");*/
-            obj.readFromFile("C:\\Users\\orakeldel\\Documents\\Uni\\Ideen\\Ivan\\orange\\orange2.xml", "ORANGE");
+            obj.readFromFile("C:\\Users\\orakeldel\\Documents\\Uni\\Ideen\\Ivan\\orange\\orange3.xml", "ORANGE");
             //obj.readFromFile("C:\\Users\\orakeldel\\Documents\\Uni\\Ideen\\Ivan\\orange\\orange_nobitmap.xml", "ORANGE");
             //obj.readFromFile(path, "ORANGE");
-            obj.passToShader(Selection.activeGameObject.GetComponent<Renderer>().sharedMaterial);
+            Material material = obj.getMaterial("Assets/Resources/MVVShader.shader");
+            Selection.activeGameObject.GetComponent<Renderer>().material = material;
+            obj.passToShader(Selection.activeGameObject.GetComponent<Renderer>().material);
         }
 
         [MenuItem("My Commands/Load volume texture")]

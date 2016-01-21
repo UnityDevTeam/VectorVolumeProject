@@ -42,10 +42,11 @@ namespace Assets.Editor.MVVReader
         public int index_size_z;
         public Matrix4x4 index_transform;
         public int index_offset;
+        public int function;
 
         // TODO seeded SDFs
 
-        public SDF(Vector3 index, Vector3 size, Matrix4x4 transform, Matrix4x4 aabb, int type, int[] index_size, Matrix4x4 index_transform, int index_offset)
+        public SDF(Vector3 index, Vector3 size, Matrix4x4 transform, Matrix4x4 aabb, int type, int[] index_size, Matrix4x4 index_transform, int index_offset, int function)
         {
             this.index_x = index[0];
             this.index_y = index[1];
@@ -61,6 +62,7 @@ namespace Assets.Editor.MVVReader
             this.index_size_z = index_size[2];
             this.index_transform = index_transform;
             this.index_offset = index_offset;
+            this.function = function;
         }
     }
 
@@ -203,23 +205,31 @@ namespace Assets.Editor.MVVReader
 
             foreach (MVVSDF sdf in sdfs.Values)
             {
-                Debug.Log("SDF " + sdf.identifier + "(" + sdf.index + "): " + sdf.file.sizes[0]+"," + sdf.file.sizes[1]+"," + sdf.file.sizes[2]);
+                //Debug.Log("SDF " + sdf.identifier + "(" + sdf.index + "): " + sdf.file.sizes[0]+"," + sdf.file.sizes[1]+"," + sdf.file.sizes[2]);
                 
                 sdf.transform.createMatrix();
 
-
+                var aabb = Matrix4x4.identity;
+                var volumeIndex = new Vector3();
+                var volumeSize = new Vector3();
+                if (sdf.function == null)
+                {
+                    sdf.file.aabb.createMatrix();
+                    aabb = sdf.file.aabb.matrix.inverse;
+                    volumeIndex = sdf.file.volume.index;
+                    volumeSize = sdf.file.volume.size;
+                }
                 
-                sdf.file.aabb.createMatrix();
 
                 // First we add our sdfs to the shader buffer objects
                 if (sdf.type == MVVSDFType.SEEDING)
                 {
                     sdf.seedIndex.transform.createMatrix();
-                    sdfs_for_shader[sdf.index] = new SDF(sdf.file.volume.index, sdf.file.volume.size, sdf.transform.matrix.inverse, sdf.file.aabb.matrix.inverse, (int)sdf.type, sdf.seedIndex.index_size, sdf.seedIndex.transform.matrix.inverse, currentIndexOffset);
+                    sdfs_for_shader[sdf.index] = new SDF(volumeIndex, volumeSize, sdf.transform.matrix.inverse, aabb, (int)sdf.type, sdf.seedIndex.index_size, sdf.seedIndex.transform.matrix.inverse, currentIndexOffset, sdf.functionID);
                 }
                 else
                 {
-                    sdfs_for_shader[sdf.index] = new SDF(sdf.file.volume.index, sdf.file.volume.size, sdf.transform.matrix.inverse, sdf.file.aabb.matrix.inverse, (int)sdf.type, new int[] { 1, 1, 1 }, Matrix4x4.identity, 0);
+                    sdfs_for_shader[sdf.index] = new SDF(volumeIndex, volumeSize, sdf.transform.matrix.inverse, aabb, (int)sdf.type, new int[] { 1, 1, 1 }, Matrix4x4.identity, 0, sdf.functionID);
                 }
                 
 
@@ -398,6 +408,51 @@ namespace Assets.Editor.MVVReader
 
 
         }
+
+        /// <summary>
+        /// Generate shader material from MVVShader in file and all custom function of this MVVRoot
+        /// </summary>
+        /// <param name="filename">Filename of MVVShader</param>
+        /// <returns></returns>
+        internal Material getMaterial(string filename)
+        {
+            string shader = File.ReadAllText(filename);
+
+            string customCode = "switch (func) {\n";
+
+            int index = 0;
+
+            foreach (MVVSDF sdf in sdfs.Values)
+            {
+                if (sdf.function != null)
+                {
+                    // this sdf has a function
+                    sdf.functionID = index;
+
+                    customCode += "case " + index + ": \n";
+                    customCode += sdf.function;
+                    customCode += "\n return 1;\n";
+
+                    index++;
+                }
+                else
+                {
+                    sdf.functionID = -1;
+                }
+            }
+
+            customCode += "}";
+
+            shader = shader.Replace("/*<<< FUNCTIONS >>>*/", customCode);
+
+            File.WriteAllText("Assets/Resources/GeneratedShader.shader", shader);
+            Shader currentShader = Resources.Load("GeneratedShader") as Shader;
+            //Debug.Log(currentShader.ToString());
+            var path = AssetDatabase.GetAssetPath(currentShader);
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            return new Material(currentShader);
+        }
+
 
         /// <summary>
         /// Reads an MVVObject from XML. Root Object must be last Object-element.
@@ -925,31 +980,40 @@ namespace Assets.Editor.MVVReader
             sdf.index = currentSDFIndex;
             currentSDFIndex++;
             sdf.identifier = nameSDF;
-            if (childNode.Attributes["file"] == null)
-                throw new IllegalMVVFileException("SDF (" + nameSDF + ") must have a file attribute");
-
-            // Loading texture START
-            var pathSDF = childNode.Attributes["file"].InnerText;
-            var rootPath = "";
-            if (Path.IsPathRooted(pathSDF))
+            if (childNode.Attributes["function"] == null || childNode.Attributes["function"].InnerText != "true")
             {
-                rootPath = pathSDF;
+                if (childNode.Attributes["file"] == null)
+                    throw new IllegalMVVFileException("SDF (" + nameSDF + ") must have a file attribute");
+
+                // Loading texture START
+                var pathSDF = childNode.Attributes["file"].InnerText;
+                var rootPath = "";
+                if (Path.IsPathRooted(pathSDF))
+                {
+                    rootPath = pathSDF;
+                }
+                else
+                {
+                    rootPath = baseDir + "\\" + pathSDF;
+                }
+                if (sdfTextures.ContainsKey(rootPath))
+                {
+                    sdf.file = sdfTextures[rootPath];
+                }
+                else
+                {
+                    sdf.loadSDF(rootPath);
+                    sdfTextures.Add(rootPath, sdf.file);
+                }
+                // Loading texture END
+                sdf.function = null;
             }
             else
             {
-                rootPath = baseDir + "\\" + pathSDF;
+                sdf.function = childNode.InnerText;
+                if (sdf.function.IndexOf("return") < 0)
+                    throw new IllegalMVVFileException("The function in SDF (" + nameSDF + ") must have a return-statement");
             }
-            if (sdfTextures.ContainsKey(rootPath))
-            {
-                sdf.file = sdfTextures[rootPath];
-            }
-            else
-            {
-                sdf.loadSDF(rootPath);
-                sdfTextures.Add(rootPath, sdf.file);
-            }
-            // Loading texture END
-
             // Loading Transformations BEGIN
             sdf.transform = getMVVTransform(childNode);
             // Loading Transformations END
@@ -1112,6 +1176,7 @@ namespace Assets.Editor.MVVReader
             }
             return transform;
         }
+
     }
 
 
