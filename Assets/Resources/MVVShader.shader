@@ -73,6 +73,8 @@
 	uniform StructuredBuffer<Region> regionBuffer;
 	uniform StructuredBuffer<Instance> instanceBuffer;
 	uniform StructuredBuffer<Indexcell> indexcellBuffer;
+	
+	uniform float time = 0;
 
 	uniform sampler2D _cubicLookup; // Lookup for fast cubic interpolation
 
@@ -210,7 +212,7 @@
 			if (isCoordValid(p) == false) {
 				return 1;
 			}
-			if (sdf.function >= 0) return userFunction(p,0,sdf.function);
+			if (sdf.function >= 0) return userFunction(p,time,sdf.function);
 			return sample_volume(p, sdf.index, sdf.size);
 		}
 		//seed
@@ -266,7 +268,7 @@
 				{
 					//return 0;
 					//return sample_volume(newP, sdf.index, sdf.size);
-					if (sdf.function >= 0) minValue = min(userFunction(p,0,sdf.function), minValue);
+					if (sdf.function >= 0) minValue = min(userFunction(p,time,sdf.function), minValue);
 					else minValue = min(sample_volume(newP, sdf.index, sdf.size), minValue);
 				}
 			}
@@ -286,7 +288,7 @@
 			if (isCoordValid(p) == false) {
 				return 1;
 			}
-			if (sdf.function >= 0) return userFunction(p,0,sdf.function);
+			if (sdf.function >= 0) return userFunction(p,time,sdf.function);
 			return sample_volume(p, sdf.index, sdf.size);
 		}
 		return 1;
@@ -328,7 +330,6 @@
 
 	void frag_surf_opaque(v2f input, out float4 color : COLOR0) //, out float depth : SV_Depth
 	{
-		
 		
 		int in_embedded = 0; // Counts the embedded level
 		int current_in_embedded = -1; //Current embedded level we are in...

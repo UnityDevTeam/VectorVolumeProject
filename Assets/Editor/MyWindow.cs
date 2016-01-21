@@ -7,12 +7,39 @@ using System.Linq;
 using System.Globalization;
 using Assets.Editor.MVVReader;
 
-class CellUnityWindow : EditorWindow
+class MyWindow : EditorWindow
 {
 
     // Debug function to instanciate molecules in edit mode
     public static class MyMenuCommands
     {
+
+        static public float myGameTime;
+        static public Material currentMaterial;
+
+        //static public MVVTimer timer;
+
+        static void doIt()
+        {
+            myGameTime += 0.01f;
+            Selection.activeGameObject.GetComponent<Renderer>().material.SetFloat("time", myGameTime);
+            SceneView.RepaintAll();
+        }
+
+        [MenuItem("My Commands/Start Timer")]
+        static void StartTime()
+        {
+            EditorApplication.update += doIt;
+            
+            
+        }
+
+        [MenuItem("My Commands/Stop Timer")]
+        static void StopTime()
+        {
+            EditorApplication.update -= doIt;
+        }
+
         [MenuItem("My Commands/Test")]
         static void Test()
         {
@@ -61,9 +88,10 @@ class CellUnityWindow : EditorWindow
             obj.readFromFile("C:\\Users\\orakeldel\\Documents\\Uni\\Ideen\\Ivan\\orange\\orange3.xml", "ORANGE");
             //obj.readFromFile("C:\\Users\\orakeldel\\Documents\\Uni\\Ideen\\Ivan\\orange\\orange_nobitmap.xml", "ORANGE");
             //obj.readFromFile(path, "ORANGE");
-            Material material = obj.getMaterial("Assets/Resources/MVVShader.shader");
-            Selection.activeGameObject.GetComponent<Renderer>().material = material;
+            currentMaterial = obj.getMaterial("Assets/Resources/MVVShader.shader");
+            Selection.activeGameObject.GetComponent<Renderer>().material = currentMaterial;
             obj.passToShader(Selection.activeGameObject.GetComponent<Renderer>().material);
+            
         }
 
         [MenuItem("My Commands/Load volume texture")]
