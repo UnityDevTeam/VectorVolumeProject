@@ -30,6 +30,14 @@ namespace Assets.Editor.MVVReader
 
         }
 
+        public MVVIndex(MVVObject mvv_object, MVVTransform transform, int tiling)
+        {
+            this.transform = new MVVTransform();
+            embedded_objects.Add(new MVVEmbedded(mvv_object, transform, tiling));
+            use_index = false;
+
+        }
+
         /// <summary>
         /// Load embedded Objects to list
         /// </summary>

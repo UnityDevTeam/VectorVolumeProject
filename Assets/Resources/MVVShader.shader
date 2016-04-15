@@ -54,6 +54,7 @@
 	{
 		float4x4 transform;
 		int rootnode;
+		int tiling;
 	};
 
 	struct Indexcell
@@ -87,7 +88,8 @@
 		float4 pos : SV_POSITION;		
 		float3 viewRay : C0LOR0;				
 		float3 worldPos : C0LOR1;		
-		float3 localPos : C0LOR2;				
+		float3 localPos : C0LOR2;
+		float3 normal : NORMAL;
 	};
 	
 	v2f vert(appdata_base v)  
@@ -97,6 +99,7 @@
 		output.localPos =  v.vertex;
 		output.worldPos =  mul (_Object2World, v.vertex);
 		output.viewRay = mul (_World2Object, output.worldPos - _WorldSpaceCameraPos);	
+		output.normal = v.normal;
         return output;
     }
 
@@ -428,6 +431,12 @@
 					inst = instanceBuffer[i];
 					node = nodeBuffer[inst.rootnode];
 					p = transform(p, inst.transform);
+					if (inst.tiling > 0){
+						p = p/2.0f+0.5f.xxx;
+						p = p - floor(p);
+						p = p-0.5f;
+						p = p*2.0f;
+					}
 
 					//in_embedded++;
 					//current_in_embedded = in_embedded;
@@ -438,7 +447,13 @@
 
 		// Ok we should have some color by now, else
 		if (color.x < 0) color = float4(0,0,0,1);
-
+	
+		// Now some shading, camera=light source, only for some depth perception
+		float3 viewRay = _WorldSpaceCameraPos.xyz;
+		float NL = dot(normalize(input.normal), normalize(viewRay));
+		float3 diffuse = color.xyz * pow(max(0.0, NL),0.4);
+		
+		color = float4(diffuse, 1);
 	}
 
 	ENDCG

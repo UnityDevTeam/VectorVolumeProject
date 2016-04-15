@@ -13,11 +13,19 @@ namespace Assets.Editor.MVVReader
     {
         public MVVIndexedObject mvv_object; // Embedded Object
         public MVVTransform transform; // Transform of object
+        public int tiling = 0;
 
         public MVVEmbedded(MVVIndexedObject mvv_object, MVVTransform transform)
         {
             this.mvv_object = mvv_object;
             this.transform = transform;
+        }
+
+        public MVVEmbedded(MVVIndexedObject mvv_object, MVVTransform transform, int tiling)
+        {
+            this.mvv_object = mvv_object;
+            this.transform = transform;
+            this.tiling = tiling;
         }
 
 

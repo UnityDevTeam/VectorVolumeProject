@@ -115,11 +115,13 @@ namespace Assets.Editor.MVVReader
     {
         public Matrix4x4 transform;
         public int rootnode;
+        public int tiling;
 
-        public Instance(Matrix4x4 transform, int rootnode)
+        public Instance(Matrix4x4 transform, int rootnode, int tiling)
         {
             this.transform = transform;
             this.rootnode = rootnode;
+            this.tiling = tiling;
         }
     }
 
@@ -162,8 +164,8 @@ namespace Assets.Editor.MVVReader
         public void passToShader(Material mat)
         {
             Node[] nodes_for_shader = new Node[128];
-            SDF[] sdfs_for_shader = new SDF[32];
-            Region[] regions_for_shader = new Region[32];
+            SDF[] sdfs_for_shader = new SDF[64];
+            Region[] regions_for_shader = new Region[64];
             Instance[] instances_for_shader = new Instance[262144];
             Indexcell[] indexcells_for_shader = new Indexcell[262144];
             Matrix4x4[] transforms_for_shader = new Matrix4x4[262144];
@@ -180,7 +182,7 @@ namespace Assets.Editor.MVVReader
             Debug.Log("...creating Buffers");
             foreach (MVVObject obj in objects.Values)
             {
-                instances_for_shader[obj.index] = new Instance(Matrix4x4.identity, obj.tree.root.index);
+                instances_for_shader[obj.index] = new Instance(Matrix4x4.identity, obj.tree.root.index, 0);
 
                 //obj.tree.debug();
 
@@ -254,7 +256,7 @@ namespace Assets.Editor.MVVReader
                                     foreach (MVVEmbedded emb in sdf.seedIndex.embedded_indexed_objects[x, y, z])
                                     {
                                         emb.transform.createMatrix();
-                                        instances_for_shader[currentObjectIndex] = new Instance(emb.transform.matrix.inverse, ((MVVSDF)emb.mvv_object).index);
+                                        instances_for_shader[currentObjectIndex] = new Instance(emb.transform.matrix.inverse, ((MVVSDF)emb.mvv_object).index, 0);
 
                                         currentObjectIndex++;
                                     }
@@ -331,7 +333,7 @@ namespace Assets.Editor.MVVReader
                                 foreach (MVVEmbedded emb in regionindex.embedded_indexed_objects[x, y, z])
                                 {
                                     emb.transform.createMatrix();
-                                    instances_for_shader[currentObjectIndex] = new Instance(emb.transform.matrix.inverse, ((MVVObject)emb.mvv_object).tree.root.index);
+                                    instances_for_shader[currentObjectIndex] = new Instance(emb.transform.matrix.inverse, ((MVVObject)emb.mvv_object).tree.root.index, emb.tiling);
                                     
                                     currentObjectIndex++;
                                 }
@@ -421,6 +423,7 @@ namespace Assets.Editor.MVVReader
             string customCode = "switch (func) {\n";
 
             int index = 0;
+            bool useFunc = false;
 
             foreach (MVVSDF sdf in sdfs.Values)
             {
@@ -432,7 +435,7 @@ namespace Assets.Editor.MVVReader
                     customCode += "case " + index + ": \n";
                     customCode += sdf.function;
                     customCode += "\n return 1;\n";
-
+                    useFunc = true;
                     index++;
                 }
                 else
@@ -443,7 +446,10 @@ namespace Assets.Editor.MVVReader
 
             customCode += "}";
 
-            shader = shader.Replace("/*<<< FUNCTIONS >>>*/", customCode);
+            if (useFunc)
+            {
+                shader = shader.Replace("/*<<< FUNCTIONS >>>*/", customCode);
+            }
 
             File.WriteAllText("Assets/Resources/GeneratedShader.shader", shader);
             Shader currentShader = Resources.Load("GeneratedShader") as Shader;
@@ -891,7 +897,19 @@ namespace Assets.Editor.MVVReader
                     if (!objects.ContainsKey(key)){
                         throw new IllegalMVVFileException("Embedded (" + key  + ") points to unknown object.");
                     }
-                    region.embedded_objects.Add(new MVVIndex(objects[key], new MVVTransform(getMVVTransform(embeddedXML))));
+                    int tiling = 0;
+                    if (embeddedXML.Attributes["type"] != null)
+                    {
+                        switch (embeddedXML.Attributes["type"].InnerText)
+                        {
+                            case "tiling":
+                                tiling = 1;
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                    region.embedded_objects.Add(new MVVIndex(objects[key], new MVVTransform(getMVVTransform(embeddedXML)), tiling));
                 }
                 else if (embeddedXML.Name == "Index")
                 {

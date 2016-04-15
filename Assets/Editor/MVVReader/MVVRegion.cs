@@ -34,6 +34,7 @@ namespace Assets.Editor.MVVReader
         /// <param name="path"></param>
         internal void loadImage(string path)
         {
+            Debug.Log("Loading image: " + path);
             Texture2D image = new Texture2D(1, 1); // image size will change on loadimage
             image.LoadImage(File.ReadAllBytes(path));
             volume.dimension = new int[] { image.width + 2, image.width + 2, image.width + 2};

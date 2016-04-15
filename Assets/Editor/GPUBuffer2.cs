@@ -7,8 +7,8 @@ public class GPUBuffer : MonoBehaviour
 {
     //cutaways
     public static int NumNodes = 128;
-    public static int NumSDFs = 32;
-    public static int NumRegions = 32;
+    public static int NumSDFs = 64;
+    public static int NumRegions = 64;
     public static int NumInstances = 262144;
     public static int NumIndices = 262144;
     //public static int NumTransforms = 262144;

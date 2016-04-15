@@ -85,7 +85,9 @@ class MyWindow : EditorWindow
                     "XML file",
                     "",
                     "xml");*/
-            obj.readFromFile("C:\\Users\\orakeldel\\Documents\\Uni\\Ideen\\Ivan\\orange\\orange3.xml", "ORANGE");
+            obj.readFromFile("C:\\Users\\orakeldel\\Documents\\Uni\\Ideen\\Ivan\\skin2\\skin_simple.xml", "MAIN");
+            //obj.readFromFile("C:\\Users\\orakeldel\\Documents\\Uni\\Ideen\\Ivan\\orange\\orange2.xml", "ORANGE");
+            //obj.readFromFile("C:\\Users\\orakeldel\\Documents\\Bachelorarbeit\\test.xml", "MAIN");
             //obj.readFromFile("C:\\Users\\orakeldel\\Documents\\Uni\\Ideen\\Ivan\\orange\\orange_nobitmap.xml", "ORANGE");
             //obj.readFromFile(path, "ORANGE");
             currentMaterial = obj.getMaterial("Assets/Resources/MVVShader.shader");
