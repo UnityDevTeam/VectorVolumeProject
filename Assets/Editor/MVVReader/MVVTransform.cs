@@ -2,6 +2,9 @@
 
 namespace Assets.Editor.MVVReader
 {
+    /// <summary>
+    /// Stores transformation information and translates VOML transformation to matrix
+    /// </summary>
     public class MVVTransform : Object
     {
         public Vector3 position = new Vector3(0, 0, 0);

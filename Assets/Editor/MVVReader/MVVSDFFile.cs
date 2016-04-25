@@ -8,6 +8,9 @@ using System.Globalization;
 
 namespace Assets.Editor.MVVReader
 {
+    /// <summary>
+    /// Handles SDF File loading from LXN format or OBJ format created with SDFGen (https://github.com/christopherbatty/SDFGen)
+    /// </summary>
     public class MVVSDFFile : IComparable
     {
         public char[] magicWord = new char[4]; // Must be 'L', 'X', 'N', '\0'
@@ -43,13 +46,13 @@ namespace Assets.Editor.MVVReader
         /// <param name="newFormat">true if new file format is used</param>
         public MVVSDFFile(byte[] bytes, bool newFormat)
         {
-            // Loading new format:
             if (!newFormat)
             {
                 loadOld(bytes);
                 return;
             }
 
+            // Loading new format:
             StreamReader file = new StreamReader(new MemoryStream(bytes));
 
             var size = file.ReadLine();
@@ -84,18 +87,6 @@ namespace Assets.Editor.MVVReader
                         volumeColors[idx].a = f;
                     }
                 }
-            }
-            //bring in range -1..1 with a 0 isosurface
-
-            Debug.Log("Min: " + min + ", Max: " + max);
-
-            var minmax = max-min;
-
-            for (int i = 0; i < linearsize; i++)
-            {
-                if (volumeColors[i].a == float.MaxValue) volumeColors[i].a = max;
-
-                volumeColors[i].a = 2 * (volumeColors[i].a - min) / minmax - 1;
             }
 
             aabb = new MVVTransform();
@@ -143,6 +134,7 @@ namespace Assets.Editor.MVVReader
 
             for (int i = 0; i < volumeColors.Length; i++)
             {
+                // Bring in range 0..1 with 0.5-iso surface, because alpha channel can only store 0..1
                 volumeColors[i].a = BitConverter.ToSingle(databytes, i * 4)/2.0f+0.5f;
             }
             // Create AABB
@@ -158,8 +150,6 @@ namespace Assets.Editor.MVVReader
             aabb = new MVVTransform();
             aabb.position = new Vector3(bboxMin[0] + diffX, bboxMin[1] + diffY, bboxMin[2] + diffZ);
             aabb.scale = new Vector3(diffX, diffY, diffZ);
-            Debug.Log("Box: " + "(" + bboxMax[0] + ", " + bboxMax[1] + ", " + bboxMax[2] + ") - (" + bboxMin[0] + ", " + bboxMin[1] + ", " + bboxMin[2] + ")");
-            Debug.Log("Box: " + "(" + aabb.position[0] + ", " + aabb.position[1] + ", " + aabb.position[2] + ") - (" + aabb.scale[0] + ", " + aabb.scale[1] + ", " + aabb.scale[2] + ")");
             volume = this.getVolume();
         }
 
@@ -168,6 +158,10 @@ namespace Assets.Editor.MVVReader
             return this.sizes[0] * this.sizes[1] * this.sizes[2] - ((MVVSDFFile)obj).sizes[0] * ((MVVSDFFile)obj).sizes[1] * ((MVVSDFFile)obj).sizes[2];
         }
 
+        /// <summary>
+        /// Get volume as MVVVolume
+        /// </summary>
+        /// <returns></returns>
         public MVVVolume getVolume()
         {
             MVVVolume volume = new MVVVolume();

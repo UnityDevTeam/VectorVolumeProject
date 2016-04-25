@@ -7,6 +7,9 @@ using UnityEditor;
 
 namespace Assets.Editor.MVVReader
 {
+    /// 
+    /// Here are the structs for the computebuffers for the shader defined.
+    /// 
 
     public struct Node
     {
@@ -44,8 +47,6 @@ namespace Assets.Editor.MVVReader
         public int index_offset;
         public int function;
 
-        // TODO seeded SDFs
-
         public SDF(Vector3 index, Vector3 size, Matrix4x4 transform, Matrix4x4 aabb, int type, int[] index_size, Matrix4x4 index_transform, int index_offset, int function)
         {
             this.index_x = index[0];
@@ -71,8 +72,6 @@ namespace Assets.Editor.MVVReader
         public int type;
         public Vector3 color;
         public float opacity;
-        // TODO textures
-        // public Vector3 scale;
         public float index_x;
         public float index_y;
         public float index_z;
@@ -137,6 +136,10 @@ namespace Assets.Editor.MVVReader
         }
     }
 
+
+    /// <summary>
+    /// This class manages an MVV, including loading.
+    /// </summary>
     public class MVVRoot
     {
         public Dictionary<string, MVVObject> objects = new Dictionary<string,MVVObject>();  // Available Objects
@@ -160,7 +163,10 @@ namespace Assets.Editor.MVVReader
 
         public Texture3D globalBitmapTexture;
 
-
+        /// <summary>
+        /// Creates computebuffers and uploads them to shader
+        /// </summary>
+        /// <param name="mat"></param>
         public void passToShader(Material mat)
         {
             Node[] nodes_for_shader = new Node[128];
@@ -171,9 +177,6 @@ namespace Assets.Editor.MVVReader
             Matrix4x4[] transforms_for_shader = new Matrix4x4[262144];
             Debug.Log("Passing MVV to shader...");
             mat.SetTexture("_VolumeAtlas", globalTexture);
-            //int max_dim = Math.Max(globalTexture.depth, Math.Max(globalTexture.width, globalTexture.height));
-            //mat.SetVector("_VolumeAtlasSize", new Vector3(globalTexture.height, globalTexture.depth, globalTexture.width));
-            //mat.SetVector("_VolumeAtlasSize", new Vector3(globalTexture.width, globalTexture.height, globalTexture.depth));
             mat.SetInt("_rootInstance", rootObject.index);
 
             mat.SetTexture("_BitmapAtlas", globalBitmapTexture);
@@ -184,8 +187,6 @@ namespace Assets.Editor.MVVReader
             {
                 instances_for_shader[obj.index] = new Instance(Matrix4x4.identity, obj.tree.root.index, 0);
 
-                //obj.tree.debug();
-
                 var nodeList = obj.tree.asList();
 
                 foreach (MVVTreeNode node in nodeList)
@@ -193,12 +194,10 @@ namespace Assets.Editor.MVVReader
                     
                     if (node.isLeaf)
                     {
-                        Debug.Log("Region Node " + node.region.identifier + "(" + node.index + ")");
                         nodes_for_shader[node.index] = new Node(-1, -1, 1, -1, node.region.index);
                     }
                     else
                     {
-                        Debug.Log("SDF Node " + node.sdf.identifier + "(" + node.index + ")");
                         nodes_for_shader[node.index] = new Node(node.positive.index, node.negative.index, 0, node.sdf.index, -1);
                     }
                 }
@@ -207,8 +206,6 @@ namespace Assets.Editor.MVVReader
 
             foreach (MVVSDF sdf in sdfs.Values)
             {
-                //Debug.Log("SDF " + sdf.identifier + "(" + sdf.index + "): " + sdf.file.sizes[0]+"," + sdf.file.sizes[1]+"," + sdf.file.sizes[2]);
-                
                 sdf.transform.createMatrix();
 
                 var aabb = Matrix4x4.identity;
@@ -280,13 +277,10 @@ namespace Assets.Editor.MVVReader
                 regionindex.embedded_indexed_objects = new List<MVVEmbedded>[1, 1, 1];
                 regionindex.embedded_indexed_objects[0, 0, 0] = new List<MVVEmbedded>();
 
-                Debug.Log(region.identifier + " Embedds: " + region.embedded_objects.Count);
-
-                // Now we create exaclty one index, for now...
+                // Now we create exactly one index, for now...
                 foreach (MVVIndex ind in region.embedded_objects)
                 {
                     ind.transform.createMatrix();
-                    Debug.Log(region.identifier + ": " + ind.transform.matrix.inverse.ToString());
                     if (ind.use_index)
                     {
                         // if we use index, assume this is the only object, for now...
@@ -300,8 +294,6 @@ namespace Assets.Editor.MVVReader
                 }
 
                 regionindex.transform.createMatrix();
-
-                Debug.Log(region.identifier + "(" + region.index + "): " + regionindex.transform.matrix.ToString());
 
                 region.transform.createMatrix();
 
@@ -347,10 +339,6 @@ namespace Assets.Editor.MVVReader
                 currentIndexOffset += regionindex.embedded_indexed_objects.GetLength(0) * regionindex.embedded_indexed_objects.GetLength(1) * regionindex.embedded_indexed_objects.GetLength(2);
             }
 
-
-            //Debug.Log("Index:" + sdfs["SECTION"].file.index[0] + "," + sdfs["SECTION"].file.index[1] + "," + sdfs["SECTION"].file.index[2]);
-            //Debug.Log("Size:" + sdfs["SECTION"].file.sizes[0] + "," + sdfs["SECTION"].file.sizes[1] + "," + sdfs["SECTION"].file.sizes[2]);
-
             // Fill buffers
             GPUBuffer.Instance.NodeBuffer.SetData(nodes_for_shader);
             GPUBuffer.Instance.SDFBuffer.SetData(sdfs_for_shader);
@@ -366,43 +354,37 @@ namespace Assets.Editor.MVVReader
             mat.SetBuffer("regionBuffer", GPUBuffer.Instance.RegionBuffer);
             mat.SetBuffer("indexcellBuffer", GPUBuffer.Instance.IndexcellBuffer);
             mat.SetBuffer("instanceBuffer", GPUBuffer.Instance.InstanceBuffer);
-            //mat.SetBuffer("transformBuffer", GPUBuffer.Instance.TransformBuffer);
 
             Debug.Log("...done!");
 
-            for (int i = 0; i < 100; i++)
-            {
-                //Debug.Log(transforms_for_shader[i].ToString());
-            }
+            // Creating Cubic Lookup Table (From Lvid Wang) (using trilinear interpolation instead)
+            //Debug.Log("Creating Cubic Lookup Table");
 
-                // Creating Cubic Lookup Table (From Lvid Wang)
-                Debug.Log("Creating Cubic Lookup Table");
+            //Color[] lookup_data = new Color[256];
 
-            Color[] lookup_data = new Color[256];
+            //for (int i = 0; i < 256; i++)
+            //{
+            //    float x = (float)i / 255.0f;
+            //    float x_sqr = x * x;
+            //    float x_cub = x * x_sqr;
 
-            for (int i = 0; i < 256; i++)
-            {
-                float x = (float)i / 255.0f;
-                float x_sqr = x * x;
-                float x_cub = x * x_sqr;
+            //    float w0 = (-x_cub + 3.0f * x_sqr - 3.0f * x + 1.0f) / 6.0f;
+            //    float w1 = (3.0f * x_cub - 6.0f * x_sqr + 4.0f) / 6.0f;
+            //    float w2 = (-3.0f * x_cub + 3.0f * x_sqr + 3.0f * x + 1.0f) / 6.0f;
+            //    float w3 = x_cub / 6.0f;
 
-                float w0 = (-x_cub + 3.0f * x_sqr - 3.0f * x + 1.0f) / 6.0f;
-                float w1 = (3.0f * x_cub - 6.0f * x_sqr + 4.0f) / 6.0f;
-                float w2 = (-3.0f * x_cub + 3.0f * x_sqr + 3.0f * x + 1.0f) / 6.0f;
-                float w3 = x_cub / 6.0f;
+            //    lookup_data[i] = new Color(1.0f - w1 / (w0 + w1) + x, // h0(x)
+            //                               1.0f + w3 / (w2 + w3) - x, // h1(x)
+            //                               w0 + w1,                   // g0(x)
+            //                               1);
+            //}
 
-                lookup_data[i] = new Color(1.0f - w1 / (w0 + w1) + x, // h0(x)
-                                           1.0f + w3 / (w2 + w3) - x, // h1(x)
-                                           w0 + w1,                   // g0(x)
-                                           1);
-            }
+            //Texture2D lookup = new Texture2D(256, 1, TextureFormat.RGBAFloat, true);
+            //lookup.anisoLevel = 0;
+            //lookup.SetPixels(lookup_data);
+            //lookup.filterMode = FilterMode.Trilinear;
 
-            Texture2D lookup = new Texture2D(256, 1, TextureFormat.RGBAFloat, true);
-            lookup.anisoLevel = 0;
-            lookup.SetPixels(lookup_data);
-            lookup.filterMode = FilterMode.Trilinear;
-
-            mat.SetTexture("_cubicLookup", lookup);
+            //mat.SetTexture("_cubicLookup", lookup);
 
             //Debug.Log(instances_for_shader[rootObject.index].transform.ToString());
             //Debug.Log(sdfs_for_shader[nodes_for_shader[instances_for_shader[rootObject.index].rootnode].sdfId].transform.inverse.ToString());
@@ -420,7 +402,8 @@ namespace Assets.Editor.MVVReader
         {
             string shader = File.ReadAllText(filename);
 
-            string customCode = "switch (func) {\n";
+            string customSwitchCode = "switch (func) {\n";
+            string customFunctionCode = "";
 
             int index = 0;
             bool useFunc = false;
@@ -432,9 +415,16 @@ namespace Assets.Editor.MVVReader
                     // this sdf has a function
                     sdf.functionID = index;
 
-                    customCode += "case " + index + ": \n";
-                    customCode += sdf.function;
-                    customCode += "\n return 1;\n";
+                    //Generate Switch statements
+                    customSwitchCode += "case " + index + ": \n";
+                    customSwitchCode += "return customFunction" + index + "(p,t);\n";
+                    customSwitchCode += "\n return 1;\n";
+
+                    //...and actual Function (proxyfunction)
+                    customFunctionCode += "float customFunction" + index + "(float3 p, float t){\n";
+                    customFunctionCode += sdf.function;
+                    customFunctionCode += "}\n\n";
+
                     useFunc = true;
                     index++;
                 }
@@ -444,16 +434,16 @@ namespace Assets.Editor.MVVReader
                 }
             }
 
-            customCode += "}";
+            customSwitchCode += "}";
 
-            if (useFunc)
+            if (useFunc) // Only change anything, if there even is an analytical function
             {
-                shader = shader.Replace("/*<<< FUNCTIONS >>>*/", customCode);
+                shader = shader.Replace("/*<<< FUNCTIONS >>>*/", customSwitchCode);
+                shader = shader.Replace("/*<<< FUNCTIONS DECLARATION >>>*/", customFunctionCode);
             }
 
             File.WriteAllText("Assets/Resources/GeneratedShader.shader", shader);
             Shader currentShader = Resources.Load("GeneratedShader") as Shader;
-            //Debug.Log(currentShader.ToString());
             var path = AssetDatabase.GetAssetPath(currentShader);
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
             return new Material(currentShader);
@@ -480,6 +470,7 @@ namespace Assets.Editor.MVVReader
 
             var baseDir = new FileInfo(filename).Directory.FullName;
 
+            //Go through every XML node and process them...
             foreach (XmlNode node in document.DocumentElement.ChildNodes)
             {
                 if (node.Name != "Object") continue;
@@ -498,7 +489,6 @@ namespace Assets.Editor.MVVReader
                         if (childNode.Attributes["name"] == null)
                             throw new IllegalMVVFileException("SDF (of Object " + nameObject + ") must have a name attribute");
                         addSDFFromNode(childNode, baseDir);
-                        Debug.Log(childNode.Attributes["name"].InnerText+" Scale: "+sdfs[childNode.Attributes["name"].InnerText].transform.scale.ToString());
                     }
                     else if (childNode.Name == "Region")
                     {
@@ -520,54 +510,25 @@ namespace Assets.Editor.MVVReader
                     }
                 }
 
-                // Finally calculate object bounds
-                this.objects[nameObject].calcBounds();
                 Debug.Log("Finished Loading stuff from " + nameObject);
             }
 
             // Loaded everything, bin packing texture
-            polulateTexture();
-            populateBitmapTexture();
+            if (regionTextures.Count > 0) //No population if no bitmap is used
+                populateTexture();
+            if (sdfTextures.Count > 0) //No population if no SDF is used
+                populateBitmapTexture();
             Debug.Log("Finished loading. Set root object to " + rootObject.identifier);
             
 
             return true;
         }
 
+        /// <summary>
+        /// Populate 3D Atlas for Region Bitmaps
+        /// </summary>
         private void populateBitmapTexture()
         {
-            /*Dictionary<string, int> nameList = new Dictionary<string,int>();
-            Texture2D[] textureList = new Texture2D[regionTextures.Count];
-
-            var i = 0;
-
-            foreach (KeyValuePair<string, Texture2D> tex in regionTextures)
-            {
-                nameList[tex.Key] = i;
-                textureList[i] = tex.Value;
-                i++;
-            }
-
-            globalBitmapTexture = new Texture2D(1, 1);
-            Rect[] erg = globalBitmapTexture.PackTextures(textureList, 2);
-
-            foreach (KeyValuePair<string, MVVRegion> region in regions)
-            {
-                if (region.Value.image_file != null && nameList.ContainsKey(region.Value.image_file)){
-                    i = nameList[region.Value.image_file];
-                    region.Value.imageIndex[0] = erg[i].min[0];
-                    region.Value.imageIndex[1] = erg[i].min[1];
-                    region.Value.imageSize = erg[i].width;
-                }
-            }
-
-            for (i = 0; i < erg.Length; i++)
-            {
-                Debug.Log(erg[i].ToString());
-            }*/
-
-            //TODO: make MVVVolume.cs and use it to store volumes for generalization
-            //      make Texture3D populateTexture(MVVVolume[] volumes) for texture packing
             MVVVolume[] volumes = new MVVVolume[regionTextures.Count];
             regionTextures.Values.CopyTo(volumes, 0);
             globalBitmapTexture = packTexture3D(volumes, new Color(1, 0, 0, 1), "bitmap", TextureFormat.RGBA32);
@@ -578,7 +539,10 @@ namespace Assets.Editor.MVVReader
             }
         }
 
-        private void polulateTexture()
+        /// <summary>
+        /// Populate 3D Atlas for SDFs
+        /// </summary>
+        private void populateTexture()
         {
             MVVVolume[] volumes = new MVVVolume[sdfTextures.Count];
             int i = 0;
@@ -590,10 +554,16 @@ namespace Assets.Editor.MVVReader
             globalTexture = packTexture3D(volumes, new Color(0, 0, 0, 1), "volumes", TextureFormat.Alpha8);
         }
 
+        /// <summary>
+        /// Packs the 3D texture atlas with all supplied volumes
+        /// </summary>
+        /// <param name="volumes"></param>
+        /// <param name="defaultColor"></param>
+        /// <param name="assetName"></param>
+        /// <param name="format"></param>
+        /// <returns></returns>
         private Texture3D packTexture3D(MVVVolume[] volumes, Color defaultColor, string assetName, TextureFormat format)
         {
-            // Using some kind of first fit (Reference: A genetic algorithm for packing in three dimensions, Corcoran, Wainwright)
-            
             // Sort by volume && biggest dimension
             List<MVVVolume> sortedVolumes = new List<MVVVolume>(volumes);
 
@@ -644,7 +614,6 @@ namespace Assets.Editor.MVVReader
             }
 
             Debug.Log("3D-Atlas size: " + dimension[0] + "," + dimension[1] + "," + dimension[2]);
-            Debug.Log("Direction: " + smallestOfBiggest);
 
             Color[] colors = new Color[dimension[0] * dimension[1] * dimension[2]];
             int currentSDF = 0;
@@ -741,15 +710,8 @@ namespace Assets.Editor.MVVReader
                 Vector3 dim = new Vector3(1.0f / (float)dimension[0], 1.0f / (float)dimension[1], 1.0f / (float)dimension[2]);
                 volume.size.Scale(dim);
                 volume.index.Scale(dim);
-                Debug.Log(volume.size.ToString() + ", " + volume.index.ToString());
+                //Debug.Log(volume.size.ToString() + ", " + volume.index.ToString());
             }
-
-            /*string afsaf = "";
-            for (int i = 0; i < 1000; i++)
-            {
-                afsaf += colors[i].ToString();
-            }
-            Debug.Log(afsaf);*/
 
             //Temp add to assets...
             string assetPath = "Assets/" + assetName + ".asset";
@@ -768,6 +730,11 @@ namespace Assets.Editor.MVVReader
 
         }
 
+        /// <summary>
+        /// Add a Mapping XML subtree
+        /// </summary>
+        /// <param name="node"></param>
+        /// <param name="tree_node"></param>
         private void addMappings(XmlNode node, MVVTreeNode tree_node)
         {
             tree_node.index = currentNodeIndex;
@@ -805,6 +772,11 @@ namespace Assets.Editor.MVVReader
             }
         }
 
+        /// <summary>
+        /// Add a region XML subtree
+        /// </summary>
+        /// <param name="childNode"></param>
+        /// <param name="baseDir"></param>
         private void addRegionFromNode(XmlNode childNode, string baseDir)
         {
             var nameRegion = childNode.Attributes["name"].InnerText;
@@ -883,6 +855,12 @@ namespace Assets.Editor.MVVReader
             regions[region.identifier] = region;
         }
 
+        /// <summary>
+        /// Add all embedded objects of a region XML subtree
+        /// </summary>
+        /// <param name="regionXML"></param>
+        /// <param name="region"></param>
+        /// <param name="baseDir"></param>
         private void processEmbeddedObjects(XmlNode regionXML, MVVRegion region, string baseDir)
         {
             foreach (XmlNode embeddedXML in regionXML.ChildNodes)
@@ -990,6 +968,11 @@ namespace Assets.Editor.MVVReader
             }
         }
 
+        /// <summary>
+        /// Add an SDF XML subtree
+        /// </summary>
+        /// <param name="childNode"></param>
+        /// <param name="baseDir"></param>
         private void addSDFFromNode(XmlNode childNode, string baseDir)
         {
             var nameSDF = childNode.Attributes["name"].InnerText;

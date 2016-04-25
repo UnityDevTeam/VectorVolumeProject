@@ -6,6 +6,9 @@ using System;
 
 namespace Assets.Editor.MVVReader
 {
+    /// <summary>
+    /// A 3D volume to be used in 3D Atlas creation
+    /// </summary>
     public class MVVVolume : IComparable
     {
         public Color[] colors;

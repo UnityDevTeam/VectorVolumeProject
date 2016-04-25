@@ -5,6 +5,9 @@ using System.IO;
 
 namespace Assets.Editor.MVVReader
 {
+    /// <summary>
+    /// Type of a region
+    /// </summary>
     public enum MVVRegionType:int
     {
         EMPTY = 0,  // No color (transparent)
@@ -13,23 +16,22 @@ namespace Assets.Editor.MVVReader
         RBF = 3    // Color from RBF (how does that work?)
     }
 
+    /// <summary>
+    /// A region, stores all information and includes image loading
+    /// </summary>
     public class MVVRegion : Object
     {
         public int index;
         public string identifier;   // Unique Name
         public MVVRegionType type;  // Type of Region
-        //public string image_file;
-        //public Texture2D image;     // For type Bitmap
-        //public float[] imageIndex = new float[3];
-        //public float[] imageSize = new float[3];
         public Color color;         // For type Color
         public float opacity = 1.0f;// Overrides color
         public MVVTransform transform; // For Bitmap transform
         public List<MVVIndex> embedded_objects = new List<MVVIndex>(); // Embedded Objects
-        public MVVVolume volume = new MVVVolume();
+        public MVVVolume volume = new MVVVolume(); //The volumetric image
 
         /// <summary>
-        /// Load image from path
+        /// Load image from path, the image has to have the size NxN^2
         /// </summary>
         /// <param name="path"></param>
         internal void loadImage(string path)
@@ -40,9 +42,8 @@ namespace Assets.Editor.MVVReader
             volume.dimension = new int[] { image.width + 2, image.width + 2, image.width + 2};
             Color[] colors = image.GetPixels();
 
-            // Put a 1px wrap border around the image, that
+            // Put a 1px wrap border around the image, for automatic blending to work
             volume.colors = new Color[(image.width + 2) * (image.width + 2) * (image.width + 2)];
-            Debug.Log(volume.colors.Length);
             int linearIndex = 0;
             int localIndex = 0;
             int xterm = 0;

@@ -13,7 +13,7 @@ namespace Assets.Editor.MVVReader
     {
         public MVVIndexedObject mvv_object; // Embedded Object
         public MVVTransform transform; // Transform of object
-        public int tiling = 0;
+        public int tiling = 0; // If this embedded object should be tiled
 
         public MVVEmbedded(MVVIndexedObject mvv_object, MVVTransform transform)
         {

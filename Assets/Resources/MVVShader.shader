@@ -102,10 +102,13 @@
 		output.normal = v.normal;
         return output;
     }
-
+	
 	/**
 	 * Function for user input, will be filled with stuff when shader stitching
 	 */
+	
+	/*<<< FUNCTIONS DECLARATION >>>*/
+
 	float userFunction(float3 p, float t, int func){
 		
 		/*<<< FUNCTIONS >>>*/
@@ -120,66 +123,67 @@
 		return (mul(mat, float4(p, 1))).xyz;
 	}
 
-	// Code adopted from Lvid Wang's Shader
+	
 	float sample_volume_cubic(float3 p) {
 		return tex3Dlod(_VolumeAtlas, float4(p, 0)).a;
-		float3 vCoordHG = p*_VolumeAtlasSize - 0.5f.xxx;
+		// Code adopted from Lvid Wang's Shader (not used anymore, using trilinear interpolation instead)
+		//float3 vCoordHG = p*_VolumeAtlasSize - 0.5f.xxx;
 		//vCoordHG = p;// -0.5f.xxx;
-		float3 hgX = tex2Dlod(_cubicLookup, float4(vCoordHG.x, 0, 0, 0)).xyz;
-		float3 hgY = tex2Dlod(_cubicLookup, float4(vCoordHG.y, 0, 0, 0)).xyz;
-		float3 hgZ = tex2Dlod(_cubicLookup, float4(vCoordHG.z, 0, 0, 0)).xyz;
+		//float3 hgX = tex2Dlod(_cubicLookup, float4(vCoordHG.x, 0, 0, 0)).xyz;
+		//float3 hgY = tex2Dlod(_cubicLookup, float4(vCoordHG.y, 0, 0, 0)).xyz;
+		//float3 hgZ = tex2Dlod(_cubicLookup, float4(vCoordHG.z, 0, 0, 0)).xyz;
 
 
 		//float3 cellSizeX = 1 / (float)_VolumeAtlasSize.xxx;
 		//float3 cellSizeY = 1 / (float)_VolumeAtlasSize.xxx;
 		//float3 cellSizeZ = 1 / (float)_VolumeAtlasSize.xxx;
-		float3 cellSizeX = float3(1 / (float)_VolumeAtlasSize.x, 0, 0);
-		float3 cellSizeY = float3(0, 1 / (float)_VolumeAtlasSize.x, 0);
-		float3 cellSizeZ = float3(0, 0, 1 / (float)_VolumeAtlasSize.x);
+		//float3 cellSizeX = float3(1 / (float)_VolumeAtlasSize.x, 0, 0);
+		//float3 cellSizeY = float3(0, 1 / (float)_VolumeAtlasSize.x, 0);
+		//float3 cellSizeZ = float3(0, 0, 1 / (float)_VolumeAtlasSize.x);
 
 		// offset -DX and +DX
-		float3 vCoord000 = p - hgX.x * cellSizeX;
-		float3 vCoord100 = p + hgX.y * cellSizeX;
+		//float3 vCoord000 = p - hgX.x * cellSizeX;
+		//float3 vCoord100 = p + hgX.y * cellSizeX;
 		// offset +DY
-		float3 vCoord010 = vCoord000 + hgY.y * cellSizeY;
-		float3 vCoord110 = vCoord100 + hgY.y * cellSizeY;
+		//float3 vCoord010 = vCoord000 + hgY.y * cellSizeY;
+		//float3 vCoord110 = vCoord100 + hgY.y * cellSizeY;
 		// offset +DZ
-		float3 vCoord011 = vCoord010 + hgZ.y * cellSizeZ;
-		float3 vCoord111 = vCoord110 + hgZ.y * cellSizeZ;
+		//float3 vCoord011 = vCoord010 + hgZ.y * cellSizeZ;
+		//float3 vCoord111 = vCoord110 + hgZ.y * cellSizeZ;
 		// offset -DZ
-		vCoord010 = vCoord010 - hgZ.x * cellSizeZ;
-		vCoord110 = vCoord110 - hgZ.x * cellSizeZ;
+		//vCoord010 = vCoord010 - hgZ.x * cellSizeZ;
+		//vCoord110 = vCoord110 - hgZ.x * cellSizeZ;
 		// offset -DY
-		vCoord000 = vCoord000 - hgY.x * cellSizeY;
-		vCoord100 = vCoord100 - hgY.x * cellSizeY;
-		float3 vCoord001 = vCoord000 + hgZ.y * cellSizeZ;
-		float3 vCoord101 = vCoord100 + hgZ.y * cellSizeZ;
-		vCoord000 = vCoord000 - hgZ.x * cellSizeZ;
-		vCoord100 = vCoord100 - hgZ.x * cellSizeZ;
+		//vCoord000 = vCoord000 - hgY.x * cellSizeY;
+		//vCoord100 = vCoord100 - hgY.x * cellSizeY;
+		//float3 vCoord001 = vCoord000 + hgZ.y * cellSizeZ;
+		//float3 vCoord101 = vCoord100 + hgZ.y * cellSizeZ;
+		//vCoord000 = vCoord000 - hgZ.x * cellSizeZ;
+		//vCoord100 = vCoord100 - hgZ.x * cellSizeZ;
 
-		float value000 = tex3Dlod(_VolumeAtlas, float4(vCoord000, 0)).a;
-		float value100 = tex3Dlod(_VolumeAtlas, float4(vCoord100, 0)).a;
-		float value010 = tex3Dlod(_VolumeAtlas, float4(vCoord010, 0)).a;
-		float value110 = tex3Dlod(_VolumeAtlas, float4(vCoord110, 0)).a;
-		float value001 = tex3Dlod(_VolumeAtlas, float4(vCoord001, 0)).a;
-		float value101 = tex3Dlod(_VolumeAtlas, float4(vCoord101, 0)).a;
-		float value011 = tex3Dlod(_VolumeAtlas, float4(vCoord011, 0)).a;
-		float value111 = tex3Dlod(_VolumeAtlas, float4(vCoord111, 0)).a;
+		//float value000 = tex3Dlod(_VolumeAtlas, float4(vCoord000, 0)).a;
+		//float value100 = tex3Dlod(_VolumeAtlas, float4(vCoord100, 0)).a;
+		//float value010 = tex3Dlod(_VolumeAtlas, float4(vCoord010, 0)).a;
+		//float value110 = tex3Dlod(_VolumeAtlas, float4(vCoord110, 0)).a;
+		//float value001 = tex3Dlod(_VolumeAtlas, float4(vCoord001, 0)).a;
+		//float value101 = tex3Dlod(_VolumeAtlas, float4(vCoord101, 0)).a;
+		//float value011 = tex3Dlod(_VolumeAtlas, float4(vCoord011, 0)).a;
+		//float value111 = tex3Dlod(_VolumeAtlas, float4(vCoord111, 0)).a;
 
 		// interpolate along x
-		value000 = lerp(value100, value000, hgX.z);
-		value010 = lerp(value110, value010, hgX.z);
-		value001 = lerp(value101, value001, hgX.z);
-		value011 = lerp(value111, value011, hgX.z);
+		//value000 = lerp(value100, value000, hgX.z);
+		//value010 = lerp(value110, value010, hgX.z);
+		//value001 = lerp(value101, value001, hgX.z);
+		//value011 = lerp(value111, value011, hgX.z);
 
 		// interpolate along y
-		value000 = lerp(value010, value000, hgY.z);
-		value001 = lerp(value011, value001, hgY.z);
+		//value000 = lerp(value010, value000, hgY.z);
+		//value001 = lerp(value011, value001, hgY.z);
 
 		// interpolate along z
-		value000 = lerp(value001, value000, hgZ.z);
+		//value000 = lerp(value001, value000, hgZ.z);
 
-		return value000;
+		//return value000;
 	}
 	
 	// Check if point is in standard cube (-1,-1,-1),(1,1,1)
@@ -220,21 +224,6 @@
 		}
 		//seed
 		if (sdf.type == 1) {
-			/*float mini = 1.0f;
-			for (int i = sdf.first_transform; i < sdf.first_transform + sdf.max_transform; i++)
-			{
-				float3 newP = transform(p, transformBuffer[i]);
-				newP = transform(newP, sdf.aabb);
-				
-				// Check range
-				if (isCoordValid(newP))
-				{
-					//return 0;
-					//return sample_volume(newP, sdf.index, sdf.size);
-					mini = min(sample_volume(newP, sdf.index, sdf.size), mini);
-				}
-			}
-			return mini;*/
 			//Indexing
 			//First check where we are in index
 			float3 indexP = transform(p, sdf.index_transform);
@@ -306,25 +295,15 @@
 		}
 		else if (region.type == 1) {
 			// bitmap:
-			/*p = transform(p, region.bitmap_transform);
-			p = p/2.0f+0.5f.xxx;
-			p = p - floor(p);
-			p = clamp(region.size.xxx*p, 0.001f.xxx, region.size.xxx-0.001f.xxx);
-			float2 uv = region.index + float2(p.x, p.z + region.size*p.y);
-			
-			//p = float3(region.index,0) + float3(region.size,0)*p;*/
 			p = transform(p, region.bitmap_transform);
 			p = p/2.0f+0.5f.xxx;
 			p = p - floor(p);
-			//p = clamp(p, 0.01f.xxx, 0.99f.xxx);
 			p = region.index + region.size*p;
-			//return float4(p,1);
-			return float4(tex3Dlod(_BitmapAtlas, float4(p, 0)).xyz,1);// region.opacity);
-			//return float4(1, 0, 0, 1);
+			return float4(tex3Dlod(_BitmapAtlas, float4(p, 0)).xyz,1);
 		}
 		else if (region.type == 2) {
 			// color
-			return float4(region.color, 1);//, region.opacity);
+			return float4(region.color, 1);
 		}
 		else {
 			return float4(0, 0, 0, 1);
@@ -333,9 +312,7 @@
 
 	void frag_surf_opaque(v2f input, out float4 color : COLOR0) //, out float depth : SV_Depth
 	{
-		
-		int in_embedded = 0; // Counts the embedded level
-		int current_in_embedded = -1; //Current embedded level we are in...
+	
 		int current_embedded_index = 0; // Gives index of current embedded objects
 		int current_embedded_length = 0; // Gives length of current embedded objects
 
@@ -344,8 +321,6 @@
 		Instance inst = instanceBuffer[i];
 		Node node = nodeBuffer[inst.rootnode];
 		float3 p = input.worldPos;
-		//p = float3(p.x,p.z,p.y);
-		//p = float3(p.y, p.z, p.x);
 		p = transform(p, inst.transform);
 		float3 oldP = p;
 
@@ -365,8 +340,6 @@
 				p = transform(oldP, inst.transform);
 				continue;
 			}
-
-			//current_in_embedded--; // We don't want to look for embedded objects, because we are already in a correct one...
 			
 			if (sample_volume(p, sdfBuffer[node.sdfId]) > 0.51) {
 				node = nodeBuffer[node.positiveId];
@@ -437,9 +410,6 @@
 						p = p-0.5f;
 						p = p*2.0f;
 					}
-
-					//in_embedded++;
-					//current_in_embedded = in_embedded;
 				}
 			}
 

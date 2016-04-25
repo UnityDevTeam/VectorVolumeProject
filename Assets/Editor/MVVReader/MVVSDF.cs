@@ -5,6 +5,9 @@ using System.IO;
 
 namespace Assets.Editor.MVVReader
 {
+    /// <summary>
+    /// Type of an SDF
+    /// </summary>
     public enum MVVSDFType:int
     {
         DEFAULT = 0, // Standard SDF...
@@ -12,18 +15,21 @@ namespace Assets.Editor.MVVReader
         TILING = 2  // Tile in all directions
     }
 
+    /// <summary>
+    /// All SDF informations are stored here
+    /// </summary>
     public class MVVSDF : MVVIndexedObject
     {
-        public int index;
+        public int index;                   // ID in shader
         public string identifier;           // Unique Name
         public MVVSDFFile file;             // File
         public MVVTransform transform;      // Transform of SDF   
         public MVVSDFType type = MVVSDFType.DEFAULT; // Type of SDF
         //public MVVTransform[] seedTransforms;  // Seed Transforms, only used if type=SEEDING
-        public MVVIndex seedIndex;
-        public float offset = 0f;              // offset iso-surface
-        public int functionID;
-        public string function;
+        public MVVIndex seedIndex;          // Index for seeded SDFs
+        public float offset = 0f;           // offset iso-surface
+        public int functionID;              // ID of function in the shader
+        public string function;             // Function string
 
 
         /// <summary>
@@ -44,51 +50,5 @@ namespace Assets.Editor.MVVReader
 
             return file;
         }
-
-        /*/// <summary>
-        /// Loads a seed file with seed positions.
-        /// </summary>
-        /// <param name="path">absolute file path</param>
-        public void loadSeedFile(string path)
-        {
-            var seedList = MVVSeedHelper.loadSeedFile(path);
-            seedTransforms = new MVVTransform[seedList.Length];
-            for (int i = 0; i < seedList.Length; i++){
-                seedTransforms[i] = new MVVTransform(seedList[i]*2 + transform.position);
-                seedTransforms[i].rotation = transform.rotation;
-                seedTransforms[i].scale = transform.scale;
-            }
-        }
-
-        /// <summary>
-        /// Loads a seed file with seed locations.
-        /// loadSeedFile must be called first.
-        /// </summary>
-        /// <param name="path">absolute file path</param>
-        public void loadSeedRotationFile(string path)
-        {
-            var seedList = MVVSeedHelper.loadSeedFile(path);
-            for (int i = 0; i < seedList.Length; i++)
-            {
-                seedTransforms[i].rotation += seedList[i];
-            }
-        }
-
-        /// <summary>
-        /// Loads a seed file with seed positions.
-        /// loadSeedFile must be called first.
-        /// </summary>
-        /// <param name="path">absolute file path</param>
-        public void loadSeedScaleFile(string path)
-        {
-
-            var seedList = MVVSeedHelper.loadSeedFile(path);
-            for (int i = 0; i < seedList.Length; i++)
-            {
-                seedTransforms[i].scale.Scale(seedList[i]);
-                
-            }
-
-        }*/
     }
 }

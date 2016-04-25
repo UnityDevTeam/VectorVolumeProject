@@ -6,6 +6,11 @@ using System;
 
 namespace Assets.Editor.MVVReader
 {
+    /// <summary>
+    /// An index for embedded objects. An index separates a cube in cells, 
+    /// each cell includes references to all embedded objects that
+    /// lie (partly) in this cell.
+    /// </summary>
     public class MVVIndex
     {
         public int index;
@@ -49,7 +54,7 @@ namespace Assets.Editor.MVVReader
         public void addObjectsFromSeed(MVVIndexedObject mvv_object, string seedfile, string rotatefile, string scalefile, MVVTransform globalTransform)
         {
             globalTransform.createMatrix();
-            Debug.Log("Global:" + globalTransform.matrix.ToString());
+            //Debug.Log("Global:" + globalTransform.matrix.ToString());
             var seedPositions = MVVSeedHelper.loadSeedFile(seedfile);
             var seedRotations = MVVSeedHelper.loadSeedFile(rotatefile);
             var seedScales = MVVSeedHelper.loadSeedFile(scalefile);
@@ -72,7 +77,6 @@ namespace Assets.Editor.MVVReader
         /// </summary>
         public void buildIndex()
         {
-            //MVVOBB[,,] index_obbs = getIndexMVVOBBs(); //obb will only be traslated...
             embedded_indexed_objects = new List<MVVEmbedded>[index_size[0], index_size[1], index_size[2]];
             /*for (var x = 0; x < index_size[0]; x++)
             {
@@ -106,14 +110,6 @@ namespace Assets.Editor.MVVReader
                 }
             }
             transform.createMatrix();
-            //Vector3 corner0 = transform.matrix.MultiplyPoint(new Vector3(-1, -1, -1));
-            //Vector3 corner1 = transform.matrix.MultiplyPoint(new Vector3(-1, -1, 1));
-            //Vector3 corner2 = transform.matrix.MultiplyPoint(new Vector3(-1, 1, -1));
-            //Vector3 corner3 = transform.matrix.MultiplyPoint(new Vector3(-1, 1, 1));
-            //Vector3 corner4 = transform.matrix.MultiplyPoint(new Vector3(1, -1, -1));
-            //Vector3 corner5 = transform.matrix.MultiplyPoint(new Vector3(1, -1, 1));
-            //Vector3 corner6 = transform.matrix.MultiplyPoint(new Vector3(1, 1, -1));
-            //Vector3 corner7 = transform.matrix.MultiplyPoint(new Vector3(1, 1, 1));
             Vector3 corner0 = new Vector3(-1, -1, -1);
             Vector3 corner1 = new Vector3(-1, -1, 1);
             Vector3 corner2 = new Vector3(-1, 1, -1);
@@ -129,14 +125,6 @@ namespace Assets.Editor.MVVReader
                 MVVTransform trans = new MVVTransform(embedded.transform);
                 trans.createMatrix();
                 Vector3[] p = new Vector3[8];
-                //p[0] = trans.matrix.MultiplyPoint(corner0);
-                //p[1] = trans.matrix.MultiplyPoint(corner1);
-                //p[2] = trans.matrix.MultiplyPoint(corner2);
-                //p[3] = trans.matrix.MultiplyPoint(corner3);
-                //p[4] = trans.matrix.MultiplyPoint(corner4);
-                //p[5] = trans.matrix.MultiplyPoint(corner5);
-                //p[6] = trans.matrix.MultiplyPoint(corner6);
-                //p[7] = trans.matrix.MultiplyPoint(corner7);
                 p[0] = transform.matrix.inverse.MultiplyPoint(trans.matrix.MultiplyPoint(corner0));
                 p[1] = transform.matrix.inverse.MultiplyPoint(trans.matrix.MultiplyPoint(corner1));
                 p[2] = transform.matrix.inverse.MultiplyPoint(trans.matrix.MultiplyPoint(corner2));
@@ -170,13 +158,6 @@ namespace Assets.Editor.MVVReader
                     if (y_cur > max_y) max_y = Math.Min(y_cur,index_size[1]-1);
                     if (z_cur > max_z) max_z = Math.Min(z_cur, index_size[2] - 1);
                 }
-                //Debug.Log("(" + min_x + "," + min_y + "," + min_z + ") (" + max_x + "," + max_y + "," + max_z + ")");
-                //Debug.Log(p[0].ToString() + "\n" + p[1].ToString() + "\n" + p[2].ToString() + "\n" + p[3].ToString() + "\n" + p[4].ToString() + "\n" + p[5].ToString() + "\n" + p[6].ToString() + "\n" + p[7].ToString());
-                //Debug.Log(p[0].x + ", " + p[0].y + ", " + p[0].z);
-                //Debug.Log(trans.matrix.ToString()); 
-                //Debug.Log(transform.matrix.ToString());
-                //Debug.Log(trans.matrix.ToString());
-                //return;
                 // Embedd into all cells that are in the cube created by min/max x/y/z
                 for (var x = min_x; x <= max_x; x++)
                 {
@@ -203,30 +184,6 @@ namespace Assets.Editor.MVVReader
                     }
                 }
             }
-            Debug.Log(counter);
-            Debug.Log(num);
-        }
-
-        private MVVOBB[,,] getIndexMVVOBBs()
-        {
-            // Calc scale for one OBB
-            Vector3 scale = Vector3.Scale(transform.scale, 
-                                          new Vector3(1f / index_size[0], 1f / index_size[1], 1f / index_size[2]));
-            MVVOBB[,,] result = new MVVOBB[index_size[0], index_size[1], index_size[2]];
-            Vector3 min = transform.position - Vector3.Scale(transform.scale, new Vector3(.5f, .5f, .5f));
-            for (var x = 0; x < index_size[0]; x++)
-            {
-                for (var y = 0; y < index_size[1]; y++)
-                {
-                    for (var z = 0; z < index_size[2]; z++)
-                    {
-                        result[x, y, z] = new MVVOBB();
-                        result[x, y, z].transform.scale = scale;
-                        result[x, y, z].transform.position = min + Vector3.Scale(scale, new Vector3(x, y, z));
-                    }
-                }
-            }
-            return result;
         }
     }
 }
